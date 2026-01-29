@@ -34,12 +34,9 @@ Below is a demonstration of the lane detection system working on a sample bowlin
 
 **Demo Video**: [Download master_final_cropped_test3.mp4](output/cropped_test3/master_final_cropped_test3.mp4)
 
-> **Note**: To embed the video directly in this README (like the example you saw), follow these steps:
-> 1. Go to https://github.com/Black-Lights/bowling-cv
-> 2. Click the pencil icon to edit README.md
-> 3. Drag and drop `output/cropped_test3/master_final_cropped_test3.mp4` into the editor
-> 4. GitHub will upload it and generate a URL like: `https://github.com/user-attachments/assets/...`
-> 5. The video will then play directly in the README
+
+https://github.com/user-attachments/assets/e9d9bca5-96c8-45bb-a854-e1c39bdd7f19
+
 
 ---
 
