@@ -27,9 +27,11 @@ Below is a demonstration of the lane detection system working on a sample bowlin
 - **Left lane boundary** (green vertical line)
 - **Right lane boundary** (red vertical line)
 
-![Lane Detection Demo](output/cropped_test3/master_final_cropped_test3.mp4)
+**Demo Video**: [master_final_cropped_test3.mp4](output/cropped_test3/master_final_cropped_test3.mp4)
 
-*Sample output showing detected lane boundaries on cropped_test3.mp4*
+*Download and play the video locally to see the lane detection in action. The video shows real-time detection of lane boundaries overlaid on the bowling footage.*
+
+**Note**: GitHub does not support embedded video playback in README files. Clone the repository and open the video file from `output/cropped_test3/` directory to view the results.
 
 ---
 
