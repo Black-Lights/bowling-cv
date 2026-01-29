@@ -21,8 +21,8 @@ VIDEO_FILES = [
     # 'cropped_test2.mp4',
     # 'cropped_test4.mp4',
     # 'cropped_test5.mp4',
-    # 'cropped_test6.mp4',
-    # 'cropped_test7.mp4'
+    'cropped_test6.mp4',
+    'cropped_test7.mp4'
 ]
 
 # ============================================
