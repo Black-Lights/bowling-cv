@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import cv2
 from tqdm import tqdm
+import json
 
 # Add parent directory to path to allow imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -19,6 +20,55 @@ from detection_functions import detect_horizontal_line, detect_vertical_boundari
 from master_line_computation import compute_master_line_from_collection, visualize_bin_analysis
 from intermediate_visualization import create_intermediate_video
 from tracking_analysis import analyze_master_line_tracking, plot_master_line_tracking, create_summary_plot
+
+
+def save_boundary_data(output_dir, master_left, master_right, median_foul_params, video_name):
+    """
+    Save detected boundary data to JSON file for reuse in top boundary detection.
+    """
+    boundary_data = {
+        'video_name': video_name,
+        'master_left': {
+            'x_intersect': int(master_left['x_intersect']),
+            'slope': float(master_left['slope']),
+            'median_angle': float(master_left.get('median_angle', 0))
+        },
+        'master_right': {
+            'x_intersect': int(master_right['x_intersect']),
+            'slope': float(master_right['slope']),
+            'median_angle': float(master_right.get('median_angle', 0))
+        },
+        'median_foul_params': {
+            'center_y': int(median_foul_params['center_y']),
+            'slope': float(median_foul_params['slope']),
+            'y_left': int(median_foul_params.get('y_left', 0)),
+            'y_right': int(median_foul_params.get('y_right', 0))
+        }
+    }
+    
+    boundary_file = os.path.join(output_dir, 'boundary_data.json')
+    with open(boundary_file, 'w') as f:
+        json.dump(boundary_data, f, indent=2)
+    
+    print(f"  Saved boundary data: boundary_data.json")
+    return boundary_file
+
+
+def load_boundary_data(output_dir):
+    """
+    Load previously saved boundary data from JSON file.
+    Returns None if file doesn't exist.
+    """
+    boundary_file = os.path.join(output_dir, 'boundary_data.json')
+    
+    if not os.path.exists(boundary_file):
+        return None
+    
+    with open(boundary_file, 'r') as f:
+        data = json.load(f)
+    
+    print(f"Loaded boundary data from: {boundary_file}")
+    return data
 
 
 def collect_lines_from_frames(video_path, num_frames=100, angle_mode='from_horizontal'):
@@ -348,6 +398,9 @@ def process_single_video(video_path, output_dir):
             visualize_bin_analysis(debug_right, 'right',
                                   os.path.join(video_output_dir, 'bin_analysis_right.png'),
                                   angle_mode)
+    # Save boundary data for reuse
+    save_boundary_data(video_output_dir, master_left, master_right, median_foul_params, video_name)
+    
     
     # PHASE 3: Process full video
     output_video = os.path.join(video_output_dir, 
