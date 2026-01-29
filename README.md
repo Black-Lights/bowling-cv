@@ -1,4 +1,4 @@
-# 🎳 Bowling Analysis Project
+# Bowling Analysis Project
 
 [![Status](https://img.shields.io/badge/status-in%20development-yellow)](https://github.com/Black-Lights/bowling-cv)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
@@ -7,22 +7,33 @@
 
 Computer vision system for analyzing bowling ball trajectory, spin/rotation axis, and toppled pins from video recordings using OpenCV and Python.
 
-## 👥 Team Members
+## Team Members
 
 - **Mohmmad Umayr Romshoo**
 - **Mohammad Ammar Mughees** ([Black-Lights](https://github.com/Black-Lights))
 
-## 📊 Project Status
+## Project Status
 
-🚧 **Phase 1: Lane Detection** - 🔄 In Progress (Bottom & Side Boundaries Complete, Top Boundary Pending)  
-⏳ **Phase 2: Ball Tracking** - Planned  
-⏳ **Phase 3: 3D Trajectory Reconstruction** - Planned  
-⏳ **Phase 4: Spin/Rotation Analysis** - Planned  
-⏳ **Phase 5: Pin Detection** - Planned  
+**Phase 1: Lane Detection** - In Progress (Bottom & Side Boundaries Complete, Top Boundary Pending)  
+**Phase 2: Ball Tracking** - Planned  
+**Phase 3: 3D Trajectory Reconstruction** - Planned  
+**Phase 4: Spin/Rotation Analysis** - Planned  
+**Phase 5: Pin Detection** - Planned
+
+## Current Progress
+
+Below is a demonstration of the lane detection system working on a sample bowling video. The system successfully detects:
+- **Foul line** (magenta horizontal line at the bottom)
+- **Left lane boundary** (green vertical line)
+- **Right lane boundary** (red vertical line)
+
+![Lane Detection Demo](output/cropped_test3/master_final_cropped_test3.mp4)
+
+*Sample output showing detected lane boundaries on cropped_test3.mp4*
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -56,7 +67,7 @@ Results will be saved in the `output/` directory.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 bowling-cv/
@@ -70,7 +81,7 @@ bowling-cv/
 │
 ├── src/                           # Source code
 │   ├── __init__.py
-│   └── lane_detection/            # 🎯 Lane boundary detection module
+│   └── lane_detection/            # Lane boundary detection module
 │       ├── __init__.py
 │       ├── config.py              # Configuration settings
 │       ├── main.py                # Main entry point
@@ -95,24 +106,24 @@ bowling-cv/
 
 ---
 
-## ✨ Features
+## Features
 
-### ✅ Implemented (Phase 1 - Partial)
+### Implemented (Phase 1 - Partial)
 - **Lane Boundary Detection**
-  - ✅ Horizontal foul line detection (bottom boundary)
-  - ✅ Vertical lane boundary detection (left & right sides)
-  - ✅ Master line computation using voting system
-  - ✅ Perspective-aware angle calculations
-  - ✅ Tracking stability analysis
-  - ✅ Multiple visualization modes
-  - ⏳ **Top boundary detection (pending)**
+  - Horizontal foul line detection (bottom boundary)
+  - Vertical lane boundary detection (left & right sides)
+  - Master line computation using voting system
+  - Perspective-aware angle calculations
+  - Tracking stability analysis
+  - Multiple visualization modes
+  - **Top boundary detection (pending)**
 
-### 🔄 In Progress
+### In Progress
 - **Complete Lane Detection (Phase 1)**
   - Top boundary of bowling area detection
   - Full lane box detection
 
-### ✅ Planned
+### Planned
 - **Ball Detection and Tracking (Phase 2)**
   - Ball detection using color/motion
   - Frame-to-frame tracking
@@ -125,7 +136,7 @@ bowling-cv/
 
 ---
 
-## 🛠️ Technologies
+## Technologies
 
 | Category | Tools |
 |----------|-------|
@@ -138,7 +149,7 @@ bowling-cv/
 
 ---
 
-## 📖 Usage Guide
+## Usage Guide
 
 ### Configuration
 
@@ -172,7 +183,7 @@ After processing, check the `output/<video_name>/` directory for:
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 Detailed documentation is available in the [`docs/`](docs/) directory:
 
@@ -183,9 +194,9 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 
 ---
 
-## 🧪 Development Roadmap
+## Development Roadmap
 
-### ✅ Phase 1: Lane Detection (In Progress)
+### Phase 1: Lane Detection (In Progress)
 - [x] Horizontal foul line detection (bottom boundary)
 - [x] Vertical boundary detection (left & right sides)
 - [x] Master line voting system
@@ -193,25 +204,25 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 - [x] Tracking analysis
 - [ ] **Top boundary detection** ← Next task
 
-### 🔄 Phase 2: Ball Tracking (Planned)
+### Phase 2: Ball Tracking (Planned)
 - [ ] Ball detection algorithm
 - [ ] Multi-frame tracking
 - [ ] Trajectory extraction
 - [ ] Position smoothing
 
-### ⏳ Phase 3: 3D Reconstruction (Planned)
+### Phase 3: 3D Reconstruction (Planned)
 - [ ] Camera calibration
 - [ ] Perspective transformation
 - [ ] 3D trajectory mapping
 - [ ] Height estimation
 
-### ⏳ Phase 4: Spin Analysis (Planned)
+### Phase 4: Spin Analysis (Planned)
 - [ ] Rotation detection
 - [ ] Axis calculation
 - [ ] Angular velocity measurement
 - [ ] Spin visualization
 
-### ⏳ Phase 5: Pin Detection (Planned)
+### Phase 5: Pin Detection (Planned)
 - [ ] Pin position detection
 - [ ] Topple counting
 - [ ] Strike/spare classification
@@ -219,7 +230,7 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 This is an academic project for the **Image Analysis and Computer Vision** course. While we're not accepting external contributions at this time, feedback and suggestions are welcome!
 
@@ -239,7 +250,7 @@ pytest tests/
 
 ---
 
-## 📝 Academic Context
+## Academic Context
 
 This project is being developed from scratch as part of our coursework in Image Analysis and Computer Vision. The implementation applies computer vision principles and techniques learned throughout the course, including:
 
@@ -252,13 +263,13 @@ This project is being developed from scratch as part of our coursework in Image 
 
 ---
 
-## 📄 License
+## License
 
 Academic project for educational purposes. All rights reserved by the team members.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Course instructors and teaching assistants
 - OpenCV community for excellent documentation
@@ -266,7 +277,7 @@ Academic project for educational purposes. All rights reserved by the team membe
 
 ---
 
-## 📧 Contact
+## Contact
 
 For questions or collaboration inquiries:
 
@@ -275,7 +286,7 @@ For questions or collaboration inquiries:
 
 ---
 
-## ⚠️ Note
+## Note
 
 This is a work in progress. **Phase 1 (Lane Detection)** is currently being completed - bottom foul line and side boundaries are working, with top boundary detection as the next development task. The implementation is being developed iteratively, with each phase building upon the previous one.
 

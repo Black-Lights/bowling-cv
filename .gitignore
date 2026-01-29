@@ -52,6 +52,9 @@ output/
 *.mov
 !assets/input/.gitkeep
 
+# Exception: Allow demo video in output
+!output/cropped_test3/master_final_cropped_test3.mp4
+
 # Keep the structure but ignore videos
 assets/input/*.mp4
 assets/input/*.avi
