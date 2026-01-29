@@ -27,11 +27,19 @@ Below is a demonstration of the lane detection system working on a sample bowlin
 - **Left lane boundary** (green vertical line)
 - **Right lane boundary** (red vertical line)
 
-**Demo Video**: [master_final_cropped_test3.mp4](output/cropped_test3/master_final_cropped_test3.mp4)
+<!-- TODO: Upload video by editing this file on GitHub web interface -->
+<!-- Drag and drop the video file from output/cropped_test3/master_final_cropped_test3.mp4 -->
+<!-- GitHub will generate a URL like: https://github.com/user-attachments/assets/... -->
+<!-- Paste the generated URL below to replace this comment -->
 
-*Download and play the video locally to see the lane detection in action. The video shows real-time detection of lane boundaries overlaid on the bowling footage.*
+**Demo Video**: [Download master_final_cropped_test3.mp4](output/cropped_test3/master_final_cropped_test3.mp4)
 
-**Note**: GitHub does not support embedded video playback in README files. Clone the repository and open the video file from `output/cropped_test3/` directory to view the results.
+> **Note**: To embed the video directly in this README (like the example you saw), follow these steps:
+> 1. Go to https://github.com/Black-Lights/bowling-cv
+> 2. Click the pencil icon to edit README.md
+> 3. Drag and drop `output/cropped_test3/master_final_cropped_test3.mp4` into the editor
+> 4. GitHub will upload it and generate a URL like: `https://github.com/user-attachments/assets/...`
+> 5. The video will then play directly in the README
 
 ---
 
