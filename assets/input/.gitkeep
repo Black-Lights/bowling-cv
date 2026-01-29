@@ -1,0 +1,8 @@
+# Place your bowling video files here
+
+This directory should contain your input bowling videos in MP4, AVI, or MOV format.
+
+Example:
+- cropped_test2.mp4
+- cropped_test3.mp4
+- etc.

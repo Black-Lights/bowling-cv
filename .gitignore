@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Old development files (keep for reference, not in repo)
+files_lat/
+
+# Project tracking
+.project_tracking.md
+.dev_notes.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Project Specific
+output/
+*.mp4
+*.avi
+*.mov
+!assets/input/.gitkeep
+
+# Keep the structure but ignore videos
+assets/input/*.mp4
+assets/input/*.avi
+assets/input/*.mov
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+temp/
+
+# OS
+Thumbs.db
+.DS_Store
