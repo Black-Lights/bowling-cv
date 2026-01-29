@@ -1,8 +1,9 @@
 # Bowling Analysis Project
 
-[![Status](https://img.shields.io/badge/status-in%20development-yellow)](https://github.com/Black-Lights/bowling-cv)
+[![Status](https://img.shields.io/badge/status-Phase%201%20Complete-green)](https://github.com/Black-Lights/bowling-cv)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.0+-green.svg)](https://opencv.org/)
+[![scikit--learn](https://img.shields.io/badge/scikit--learn-1.0+-orange.svg)](https://scikit-learn.org/)
 [![License](https://img.shields.io/badge/license-Academic-lightgrey)](LICENSE)
 
 Computer vision system for analyzing bowling ball trajectory, spin/rotation axis, and toppled pins from video recordings using OpenCV and Python.
@@ -14,7 +15,7 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 
 ## Project Status
 
-**Phase 1: Lane Detection** - In Progress (Bottom & Side Boundaries Complete, Top Boundary Pending)  
+**Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
 **Phase 2: Ball Tracking** - Planned  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
 **Phase 4: Spin/Rotation Analysis** - Planned  
@@ -22,10 +23,11 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 
 ## Current Progress
 
-Below is a demonstration of the lane detection system working on a sample bowling video. The system successfully detects:
-- **Foul line** (magenta horizontal line at the bottom)
-- **Left lane boundary** (green vertical line)
-- **Right lane boundary** (red vertical line)
+Below is a demonstration of the complete lane detection system working on bowling videos. The system successfully detects **all 4 boundaries**:
+- **Top boundary** (green horizontal line - pin area)
+- **Foul line** (red horizontal line at the bottom)
+- **Left lane boundary** (blue vertical line)
+- **Right lane boundary** (blue vertical line)
 
 <!-- TODO: Upload video by editing this file on GitHub web interface -->
 <!-- Drag and drop the video file from output/cropped_test3/master_final_cropped_test3.mp4 -->
@@ -49,6 +51,7 @@ https://github.com/user-attachments/assets/e9d9bca5-96c8-45bb-a854-e1c39bdd7f19
 - NumPy, SciPy
 - Pandas, Matplotlib
 - tqdm (for progress bars)
+- scikit-learn (for MSAC/RANSAC fitting)
 
 ### Installation
 
@@ -58,19 +61,21 @@ git clone https://github.com/Black-Lights/bowling-cv.git
 cd bowling-cv
 
 # Install required packages
-pip install -r requirements.txt
+pip install opencv-python numpy scipy pandas matplotlib tqdm scikit-learn
 ```
 
-### Running Lane Detection
+### Running Complete Lane Detection (All 4 Boundaries)
 
 ```bash
-# Place your bowling video files in assets/input/
-# Then run the lane detection module
+# Step 1: Detect bottom, left, and right boundaries
 cd src/lane_detection
 python main.py
+
+# Step 2: Detect top boundary with MSAC fitting
+python test_top_detection.py
 ```
 
-Results will be saved in the `output/` directory.
+**Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
 
 ---
 
@@ -91,16 +96,27 @@ bowling-cv/
 │   └── lane_detection/            # Lane boundary detection module
 │       ├── __init__.py
 │       ├── config.py              # Configuration settings
-│       ├── main.py                # Main entry point
+│       ├── main.py                # Main entry point (bottom/left/right)
+│       ├── test_top_detection.py  # Top boundary detection script
 │       ├── detection_functions.py # Line detection algorithms
 │       ├── detection_utils.py     # Utility functions
 │       ├── master_line_computation.py # Master line voting system
+│       ├── top_boundary_detection.py  # Top boundary with MSAC
+│       ├── mask_lane_area.py      # Lane masking utilities
+│       ├── preprocess_frames.py   # HSV filtering + gap filling
 │       ├── intermediate_visualization.py # Debug visualizations
 │       └── tracking_analysis.py   # Tracking stability analysis
 │
 ├── output/                        # Generated outputs
 │   └── <video_name>/
-│       ├── master_final_*.mp4     # Processed video with lane boundaries
+│       ├── boundary_data.json     # Saved boundary parameters
+│       ├── masked_*.mp4           # Lane-masked video
+│       ├── preprocessed_*.mp4     # HSV filtered video
+│       ├── master_final_*.mp4     # Video with bottom/left/right
+│       ├── final_all_boundaries_*.mp4 # All 4 boundaries (COMPLETE)
+│       ├── top_vis_sobel_*.mp4    # Sobel edge visualization
+│       ├── top_vis_masked_*.mp4   # Preprocessed with top line
+│       ├── msac_fitting_*.png     # MSAC analysis plot
 │       ├── bin_analysis_*.png     # Voting system visualization
 │       └── tracking_*.png         # Tracking stability plots
 │
@@ -115,22 +131,20 @@ bowling-cv/
 
 ## Features
 
-### Implemented (Phase 1 - Partial)
-- **Lane Boundary Detection**
-  - Horizontal foul line detection (bottom boundary)
-  - Vertical lane boundary detection (left & right sides)
-  - Master line computation using voting system
-  - Perspective-aware angle calculations
-  - Tracking stability analysis
-  - Multiple visualization modes
-  - **Top boundary detection (pending)**
+### ✅ Implemented (Phase 1 - COMPLETE)
+- **Complete Lane Boundary Detection**
+  - ✅ Horizontal foul line detection (bottom boundary)
+  - ✅ Vertical lane boundary detection (left & right sides)
+  - ✅ Top boundary detection (pin area) with MSAC line fitting
+  - ✅ Master line computation using voting system
+  - ✅ Perspective-aware angle calculations
+  - ✅ Tracking stability analysis
+  - ✅ Multiple visualization modes
+  - ✅ HSV preprocessing with gap filling
+  - ✅ Robust MSAC (M-estimator SAmple Consensus) fitting
+  - ✅ Complete lane box (all 4 boundaries)
 
-### In Progress
-- **Complete Lane Detection (Phase 1)**
-  - Top boundary of bowling area detection
-  - Full lane box detection
-
-### Planned
+### Planned (Phase 2+)
 - **Ball Detection and Tracking (Phase 2)**
   - Ball detection using color/motion
   - Frame-to-frame tracking

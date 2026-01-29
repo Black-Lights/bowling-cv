@@ -29,11 +29,19 @@ def save_boundary_data(output_dir, master_left, master_right, median_foul_params
     boundary_data = {
         'video_name': video_name,
         'master_left': {
+            'x_top': int(master_left['x_top']),
+            'y_top': int(master_left['y_top']),
+            'x_bottom': int(master_left['x_bottom']),
+            'y_bottom': int(master_left['y_bottom']),
             'x_intersect': int(master_left['x_intersect']),
             'slope': float(master_left['slope']),
             'median_angle': float(master_left.get('median_angle', 0))
         },
         'master_right': {
+            'x_top': int(master_right['x_top']),
+            'y_top': int(master_right['y_top']),
+            'x_bottom': int(master_right['x_bottom']),
+            'y_bottom': int(master_right['y_bottom']),
             'x_intersect': int(master_right['x_intersect']),
             'slope': float(master_right['slope']),
             'median_angle': float(master_right.get('median_angle', 0))

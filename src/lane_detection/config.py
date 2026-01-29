@@ -46,6 +46,31 @@ VOTE_THRESHOLD = 0.15  # 15%
 ANGLE_TOLERANCE = 3
 
 # ============================================
+# PHASE 3: TOP BOUNDARY DETECTION
+# ============================================
+
+# Top boundary detection configuration
+TOP_DETECTION_USE_FULL_VIDEO = True  # True = use entire video, False = use limited frames
+TOP_DETECTION_FRAMES = 100  # Number of frames to process (if USE_FULL_VIDEO = False)
+
+# Top scan region (process only specific portion of frame to avoid scoreboard/text at very top)
+TOP_SCAN_REGION_START = 0.10  # Start scanning at 10% from top (skip scoreboard area)
+TOP_SCAN_REGION_END = 0.35    # End scanning at 35% from top (where pins area ends)
+
+# Preprocessing configuration (HSV filtering and gap filling)
+MAX_PATCH_SIZE_ROW = 100  # Fill horizontal black patches smaller than this (in pixels)
+MAX_PATCH_SIZE_COL = 50   # Fill vertical black patches smaller than this (in pixels)
+
+# Sobel edge detection for top boundary
+SOBEL_KERNEL_SIZE = 5      # Sobel kernel size (must be odd: 1, 3, 5, 7)
+SOBEL_THRESHOLD = 10       # Minimum edge strength to consider a point
+CENTER_REGION_START = 0.25 # Start of center region (25% from left)
+CENTER_REGION_END = 0.75   # End of center region (75% from left)
+TOP_CANDIDATES_RATIO = 0.20  # Top 20% of strongest rows to consider
+
+
+
+# ============================================
 # VISUALIZATION OPTIONS
 # ============================================
 

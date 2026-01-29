@@ -1,3 +1,200 @@
+# What's New - Version 3.0 (Top Boundary Detection)
+
+## 🎯 Major Updates - Top Boundary Detection
+
+### 1. ✅ Complete Lane Detection with All 4 Boundaries
+**Implemented!** The system now detects all four boundaries of the bowling lane:
+- **Bottom boundary**: Foul line (red)
+- **Left boundary**: Master left line (blue)
+- **Right boundary**: Master right line (blue)  
+- **Top boundary**: Pin area boundary (green) - **NEW!**
+
+### 2. 🔬 Sobel Edge Detection for Top Boundary
+Advanced edge detection using Sobel operator to find the topmost strong horizontal edge in the pin area.
+
+**Features:**
+- Preprocessed with HSV color filtering (brown + red/orange lane colors)
+- Bidirectional gap filling (rows ≤100px, columns ≤50px)
+- Sobel Y filter for horizontal edge detection
+- Configurable scan region (10%-35% from top by default)
+- MSAC (M-estimator SAmple Consensus) line fitting - **NEW!**
+
+### 3. 📐 MSAC Line Fitting for Robust Top Boundary
+**New Algorithm!** Instead of using per-frame detections, we now fit a single robust line using MSAC across ALL frames.
+
+**How it works:**
+1. Detect top boundary in each frame using Sobel
+2. Collect all detected points from all frames
+3. Use RANSAC/MSAC to fit a single best-fit line
+4. Filter out outlier detections automatically
+5. Use the MSAC line in all output videos
+
+**Benefits:**
+- More stable top boundary (eliminates frame-to-frame jitter)
+- Automatic outlier rejection (typically 30-40% of detections are outliers)
+- Single consistent line across entire video
+- Better performance with varying lighting/shadows
+
+### 4. 📊 Enhanced Visualization and Analysis
+**5 Output Files per Video:**
+
+1. **Sobel Heatmap Video** (`top_vis_sobel_*.mp4`)
+   - Red/orange heatmap showing edge strength
+   - Cyan line: per-frame detection
+   - Green line: MSAC fitted line
+   - Shows search region boundaries
+
+2. **Preprocessed Video** (`top_vis_masked_*.mp4`)
+   - HSV filtered and gap-filled frame
+   - Green line: MSAC top boundary
+
+3. **Final Video** (`final_all_boundaries_*.mp4`)
+   - All 4 boundaries drawn on original video
+   - Blue: left/right master lines
+   - Red: foul line
+   - Green: MSAC top boundary
+
+4. **Intersection Plot** (`top_line_intersection_y_*.png`)
+   - Shows where top line intersects with master lines
+   - Y-coordinate tracking across frames
+   - Mean and standard deviation statistics
+
+5. **MSAC Fitting Analysis** (`msac_fitting_*.png`) - **NEW!**
+   - All detected points colored by frame
+   - Inliers vs outliers visualization
+   - Residuals distribution histogram
+   - Y position stability across frames
+
+### 5. 🎨 HSV Preprocessing Pipeline
+Robust preprocessing to handle varying lane conditions:
+
+**Color Filtering:**
+- Brown lane color: H 0-20, S 50-255, V 50-255
+- Red/orange markers: H 150-180, S 50-255, V 50-255
+
+**Gap Filling:**
+- Horizontal gaps: ≤100 pixels
+- Vertical gaps: ≤50 pixels
+- Preserves lane structure while removing noise
+
+### 6. 📁 Updated File Organization
+```
+output/
+├── video_name/
+│   ├── boundary_data.json              # Saved boundary parameters
+│   ├── masked_video.mp4                # Lane-masked video
+│   ├── preprocessed_video.mp4          # HSV filtered + gap filled
+│   ├── top_vis_sobel_video.mp4         # Sobel heatmap
+│   ├── top_vis_masked_video.mp4        # Preprocessed with line
+│   ├── final_all_boundaries_video.mp4  # All 4 boundaries
+│   ├── msac_fitting_video.png          # MSAC analysis - NEW!
+│   └── top_line_intersection_y.png     # Intersection analysis
+```
+
+---
+
+## 📝 Quick Start - Top Boundary Detection
+
+### Basic Usage
+```bash
+cd src/lane_detection
+python test_top_detection.py
+```
+
+**What it does:**
+1. Loads existing boundary data (bottom/left/right from main.py)
+2. Creates masked video (lane area only)
+3. Preprocesses with HSV filtering + gap filling
+4. Detects top boundary using Sobel in all frames
+5. Fits MSAC line from all detections
+6. Generates 5 output files per video
+
+### Configuration
+Edit `config.py`:
+
+```python
+# Top boundary detection settings
+TOP_SCAN_REGION_START = 0.10    # Start at 10% from top
+TOP_SCAN_REGION_END = 0.35      # End at 35% from top
+SOBEL_KERNEL_SIZE = 5           # Sobel kernel (1, 3, 5, 7)
+SOBEL_THRESHOLD = 10            # Minimum edge strength
+MAX_PATCH_SIZE_ROW = 100        # Fill horizontal gaps
+MAX_PATCH_SIZE_COL = 50         # Fill vertical gaps
+```
+
+### MSAC Parameters
+The MSAC fitting uses these defaults:
+- **Residual threshold**: 5.0 pixels (max distance for inliers)
+- **Max trials**: 1000 iterations
+- **Min samples**: 2 points to fit a line
+- **Random state**: 42 (reproducible results)
+
+---
+
+## 🔧 Technical Details
+
+### Top Boundary Detection Pipeline
+
+1. **Lane Masking**
+   - Uses master left/right lines from Phase 1
+   - Creates trapezoid mask for lane area
+   - Removes background/gutter regions
+
+2. **HSV Preprocessing**
+   - Converts to HSV color space
+   - Filters for brown (lane) and red/orange (markers)
+   - Combines both masks with OR operation
+   - Fills small gaps bidirectionally
+
+3. **Sobel Edge Detection**
+   - Applies Sobel Y filter (horizontal edges)
+   - Searches in configurable region (default 10-35% from top)
+   - Calculates row-wise average edge strength
+   - Selects top 20% strongest rows
+   - Returns topmost strong edge
+
+4. **MSAC Line Fitting**
+   - Collects all left/right endpoints from all frames
+   - Fits RANSAC model (X → Y mapping)
+   - Identifies inliers (residual < 5px)
+   - Predicts Y coordinates at frame edges
+   - Creates single horizontal line
+
+5. **Visualization**
+   - Draws MSAC line consistently across all frames
+   - Shows per-frame detections vs MSAC line in Sobel video
+   - Generates analysis plots for quality assessment
+
+---
+
+## 📊 Typical Results
+
+### MSAC Fitting Statistics
+- **cropped_test3**: 63.4% inliers, MSAC Y=130
+- **cropped_test6**: 54.2% inliers, MSAC Y=103
+- **cropped_test7**: 65.7% inliers, MSAC Y=151
+
+Higher inlier ratio = more consistent detections across frames
+
+---
+
+## 🛠️ Dependencies (New)
+
+Added for top boundary detection:
+```bash
+pip install scikit-learn  # For RANSAC/MSAC fitting
+```
+
+Existing dependencies still required:
+- opencv-python
+- numpy
+- scipy
+- matplotlib
+- tqdm
+- pandas
+
+---
+
 # What's New - Version 2.0
 
 ## 🎯 Major Updates
