@@ -734,10 +734,15 @@ class LaneDetector:
         # Process frames with GPU acceleration
         start_time = time.perf_counter()
         use_gpu = getattr(self.config, 'USE_GPU', True)
+        gpu_verbose = getattr(self.config, 'GPU_VERBOSE', False)
+        
+        if gpu_verbose:
+            print(f"\n  GPU ACCELERATION DEBUG:")
+            print(f"  ----------------------")
         
         preprocessed = []
         with tqdm(total=len(frames), desc="  Preprocessing frames") as pbar:
-            for frame in frames:
+            for idx, frame in enumerate(frames):
                 processed = preprocess_frame_hsv(
                     frame,
                     self.config.MAX_PATCH_SIZE_ROW,
@@ -745,7 +750,9 @@ class LaneDetector:
                     self.config.TOP_REGION_RATIO,
                     self.config.MAX_TOP_PATCH_AREA,
                     use_gpu=use_gpu,
-                    gpu_accelerator=self.gpu_accelerator
+                    gpu_accelerator=self.gpu_accelerator,
+                    verbose=gpu_verbose,
+                    frame_idx=idx
                 )
                 preprocessed.append(processed)
                 pbar.update(1)

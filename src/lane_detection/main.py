@@ -397,7 +397,7 @@ def process_single_video(video_path, output_dir):
         print("\nWarning: Could not compute right master line")
     
     # Save bin analysis
-    if SAVE_BIN_ANALYSIS:
+    if SAVE_BIN_ANALYSIS_PLOTS:
         if debug_left:
             visualize_bin_analysis(debug_left, 'left',
                                   os.path.join(video_output_dir, 'bin_analysis_left.png'),
@@ -437,7 +437,7 @@ def process_single_video(video_path, output_dir):
             create_intermediate_video(full_video_path, output_path, mode, detect_horizontal_line)
     
     # PHASE 5: Tracking analysis
-    if GENERATE_TRACKING_PLOTS and master_left and master_right:
+    if SAVE_TRACKING_PLOTS and master_left and master_right:
         print(f"\n{'='*60}")
         print(f"PHASE 5: Tracking analysis")
         print(f"{'='*60}")
@@ -461,7 +461,7 @@ def process_single_video(video_path, output_dir):
     print(f"\n✓ Completed: {video_name}")
     print(f"  Output: {video_output_dir}")
     
-    return tracking_data if (GENERATE_TRACKING_PLOTS and master_left and master_right) else None
+    return tracking_data if (SAVE_TRACKING_PLOTS and master_left and master_right) else None
 
 
 def main():
@@ -478,7 +478,7 @@ def main():
     print(f"  Visualization: {VISUALIZATION_MODE}")
     print(f"  Angle mode: {'from_vertical' if USE_ABSOLUTE_ANGLES else 'from_horizontal'}")
     print(f"  Intermediate videos: {SAVE_INTERMEDIATE_VIDEOS}")
-    print(f"  Tracking analysis: {GENERATE_TRACKING_PLOTS}")
+    print(f"  Tracking analysis: {SAVE_TRACKING_PLOTS}")
     
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     
@@ -499,7 +499,7 @@ def main():
                 traceback.print_exc()
     
     # Create summary plot comparing all videos
-    if CREATE_SUMMARY_PLOT and all_tracking_data:
+    if SAVE_SUMMARY_PLOT and all_tracking_data:
         print(f"\n{'='*70}")
         print(" CREATING SUMMARY PLOT")
         print("="*70)
@@ -513,9 +513,9 @@ def main():
     print(f"  - Bin analysis plots")
     if SAVE_INTERMEDIATE_VIDEOS:
         print(f"  - Intermediate visualization videos")
-    if GENERATE_TRACKING_PLOTS:
+    if SAVE_TRACKING_PLOTS:
         print(f"  - Tracking analysis plots")
-    if CREATE_SUMMARY_PLOT and all_tracking_data:
+    if SAVE_SUMMARY_PLOT and all_tracking_data:
         print(f"  - Summary comparison plot")
 
 

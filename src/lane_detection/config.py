@@ -41,7 +41,7 @@ SAVE_MASKED_FRAMES = True  # Save masked frames as .npz file for reuse in later 
 
 # GPU Acceleration (requires CUDA-enabled OpenCV)
 USE_GPU = True  # Enable GPU acceleration for intensive operations (HSV conversion, Sobel, etc.)
-GPU_VERBOSE = True  # Print GPU status and performance information
+GPU_VERBOSE = False  # Print GPU status and performance information
 # When False: always reprocess frames, don't save cache
 
 

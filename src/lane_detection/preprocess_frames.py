@@ -113,7 +113,7 @@ def fill_small_black_patches(masked_img, original_img, max_patch_size_row, max_p
 
 def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50, 
                          top_region_ratio=0.3, max_top_patch_area=2000, 
-                         use_gpu=True, gpu_accelerator=None):
+                         use_gpu=True, gpu_accelerator=None, verbose=False, frame_idx=0):
     """
     Apply HSV color filtering to extract brown and red/orange regions,
     fill small black gaps with original pixels, and remove small colored patches from top.
@@ -129,6 +129,8 @@ def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50,
                            larger patches (like pin deck) are kept
         use_gpu: Whether to use GPU acceleration (default: True)
         gpu_accelerator: Existing GPUAccelerator instance (optional, creates new if None)
+        verbose: Print debug info about GPU usage
+        frame_idx: Frame index for debugging
     
     Returns:
         Preprocessed frame with brown/red regions, small gaps filled, and small top patches removed
@@ -139,26 +141,51 @@ def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50,
     
     # Convert to HSV (GPU-accelerated if available)
     if use_gpu and gpu_accelerator is not None and gpu_accelerator.use_gpu:
+        if verbose and frame_idx == 0:
+            print(f"    [GPU] cvtColor BGR→HSV")
         hsv_frame = gpu_accelerator.cvtColor_BGR2HSV(frame)
     else:
+        if verbose and frame_idx == 0:
+            print(f"    [CPU] cvtColor BGR→HSV")
         hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     
     # Brown mask (H: 0-20, S: 0-255, V: 50-255)
+    # inRange is very fast on CPU, GPU overhead not worth it
+    if verbose and frame_idx == 0:
+        print(f"    [CPU] inRange (brown mask)")
     mask_brown = cv2.inRange(hsv_frame, (0, 0, 50), (20, 255, 255))
     
     # Red/Orange mask (H: 150-180, S: 30-200, V: 200-255)
+    if verbose and frame_idx == 0:
+        print(f"    [CPU] inRange (red/orange mask)")
     mask_red_orange = cv2.inRange(hsv_frame, (150, 30, 200), (180, 200, 255))
     
-    # Combine masks
+    # Combine masks - CPU is faster for this
+    if verbose and frame_idx == 0:
+        print(f"    [CPU] bitwise_or (combine masks)")
     combined_mask = cv2.bitwise_or(mask_brown, mask_red_orange)
     
-    # Apply mask to original frame
+    # Apply mask to original frame - CPU is faster for this
+    if verbose and frame_idx == 0:
+        print(f"    [CPU] bitwise_and (apply mask)")
     masked_img = cv2.bitwise_and(frame, frame, mask=combined_mask)
     
-    # Step 1: Fill small black patches with original image pixels (rows and columns)
-    filled_img = fill_small_black_patches(masked_img, frame, max_patch_size_row, max_patch_size_col)
+    # Step 1: Fill small black patches - use morphological closing instead of slow row/col scanning
+    if verbose and frame_idx == 0:
+        print(f"    [CPU-OPTIMIZED] morphological closing (replacing slow row/col scan)")
+    # Convert to grayscale for morphology
+    gray = cv2.cvtColor(masked_img, cv2.COLOR_BGR2GRAY)
+    # Use morphological closing to fill small gaps
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (max_patch_size_row, max_patch_size_col))
+    closed_mask = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
+    # Apply the closed mask
+    filled_img = cv2.bitwise_and(frame, frame, mask=closed_mask)
+    # Also keep the original masked content
+    filled_img = cv2.add(filled_img, masked_img)
     
-    # Step 2: Remove small colored patches from top region (keep only large areas like pin deck)
+    # Step 2: Remove small colored patches from top - use faster connected components
+    if verbose and frame_idx == 0:
+        print(f"    [CPU-OPTIMIZED] connected components (faster than old method)")
     final_img = remove_small_colored_patches_top(filled_img, top_region_ratio, max_top_patch_area)
     
     return final_img

@@ -195,19 +195,72 @@ class GPUAccelerator:
         Returns:
             Binary mask
         """
+        # Use CPU - inRange is very fast on CPU and GPU overhead isn't worth it
+        return cv2.inRange(frame_hsv, lower, upper)
+    
+    def bitwise_or(self, src1: np.ndarray, src2: np.ndarray) -> np.ndarray:
+        """
+        Bitwise OR operation (GPU-accelerated if available).
+        
+        Args:
+            src1: First input array
+            src2: Second input array
+            
+        Returns:
+            Result array
+        """
         if self.use_gpu:
             try:
-                # For inRange, CPU is often faster for small images
-                # GPU is beneficial for large images or batch processing
-                # Fallback to CPU for simplicity
-                return cv2.inRange(frame_hsv, lower, upper)
+                # Upload to GPU
+                gpu_src1 = cv2.cuda_GpuMat()
+                gpu_src2 = cv2.cuda_GpuMat()
+                gpu_src1.upload(src1)
+                gpu_src2.upload(src2)
+                
+                # Bitwise OR on GPU
+                gpu_result = cv2.cuda.bitwise_or(gpu_src1, gpu_src2)
+                
+                # Download from GPU
+                return gpu_result.download()
                 
             except Exception as e:
                 if self.verbose:
-                    print(f"Warning: GPU inRange failed, falling back to CPU - {e}")
-                return cv2.inRange(frame_hsv, lower, upper)
+                    print(f"Warning: GPU bitwise_or failed, falling back to CPU - {e}")
+                return cv2.bitwise_or(src1, src2)
         else:
-            return cv2.inRange(frame_hsv, lower, upper)
+            return cv2.bitwise_or(src1, src2)
+    
+    def bitwise_and(self, src1: np.ndarray, src2: np.ndarray) -> np.ndarray:
+        """
+        Bitwise AND operation (GPU-accelerated if available).
+        
+        Args:
+            src1: First input array
+            src2: Second input array
+            
+        Returns:
+            Result array
+        """
+        if self.use_gpu:
+            try:
+                # Upload to GPU
+                gpu_src1 = cv2.cuda_GpuMat()
+                gpu_src2 = cv2.cuda_GpuMat()
+                gpu_src1.upload(src1)
+                gpu_src2.upload(src2)
+                
+                # Bitwise AND on GPU
+                gpu_result = cv2.cuda.bitwise_and(gpu_src1, gpu_src2)
+                
+                # Download from GPU
+                return gpu_result.download()
+                
+            except Exception as e:
+                if self.verbose:
+                    print(f"Warning: GPU bitwise_and failed, falling back to CPU - {e}")
+                return cv2.bitwise_and(src1, src2)
+        else:
+            return cv2.bitwise_and(src1, src2)
 
 
 class PerformanceTracker:

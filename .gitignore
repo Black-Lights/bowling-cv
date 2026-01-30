@@ -26,6 +26,8 @@ env/
 ENV/
 env.bak/
 venv.bak/
+venv_gpu/
+venv_gpu_linux/
 
 # Old development files (keep for reference, not in repo)
 files_lat/
