@@ -38,6 +38,10 @@ SAVE_PREPROCESSED_FRAMES = True  # Save preprocessed frames as .npz file for reu
 SAVE_MASKED_FRAMES = True  # Save masked frames as .npz file for reuse in later phases
 # When True: frames are saved to output/video_name/preprocessed_frames.npz (or masked_frames.npz)
 # On next run: if file exists, loads from cache instead of reprocessing (huge speedup!)
+
+# GPU Acceleration (requires CUDA-enabled OpenCV)
+USE_GPU = True  # Enable GPU acceleration for intensive operations (HSV conversion, Sobel, etc.)
+GPU_VERBOSE = True  # Print GPU status and performance information
 # When False: always reprocess frames, don't save cache
 
 

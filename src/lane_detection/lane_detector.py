@@ -4,7 +4,9 @@ Lane Detection Module - Complete Pipeline for Phase 1
 This module provides the LaneDetector class for detecting all 4 boundaries
 of a bowling lane: bottom (foul line), left/right (master lines), and top (pin area).
 
-Version: 1.0.0
+GPU-accelerated version for HSV conversion and Sobel operations when available.
+
+Version: 1.1.0
 Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
 Created: January 29, 2026
 Last Updated: January 30, 2026
@@ -29,6 +31,7 @@ from .top_boundary_detection import (
 from .mask_lane_area import apply_mask_to_video
 from .preprocess_frames import create_preprocessed_video
 from .tracking_analysis import analyze_master_line_tracking, plot_master_line_tracking
+from .gpu_utils import get_gpu_accelerator, get_performance_tracker
 
 
 class LaneDetector:
@@ -72,7 +75,7 @@ class LaneDetector:
         >>> print(detector.intersections)
     """
     
-    VERSION = "1.0.0"
+    VERSION = "1.1.0"
     
     def __init__(self, video_path: str, config):
         """
@@ -96,6 +99,12 @@ class LaneDetector:
         
         self.video_path = video_path
         self.config = config
+        
+        # Initialize GPU accelerator
+        use_gpu = getattr(config, 'USE_GPU', True)
+        gpu_verbose = getattr(config, 'GPU_VERBOSE', True)
+        self.gpu_accelerator = get_gpu_accelerator(use_gpu=use_gpu, verbose=gpu_verbose)
+        self.performance_tracker = get_performance_tracker()
         
         # Setup output directory
         self.video_name = os.path.splitext(os.path.basename(video_path))[0]
@@ -511,6 +520,10 @@ class LaneDetector:
         # Cleanup temporary files
         self._cleanup_temp_files()
         
+        # Print GPU performance summary if GPU was used
+        if self.gpu_accelerator.use_gpu:
+            self.performance_tracker.print_summary()
+        
         print(f"\n{'='*70}")
         print(f"✅ All results saved to: {self.output_dir}")
         print(f"{'='*70}\n")
@@ -695,6 +708,7 @@ class LaneDetector:
         """
         Internal: Preprocess frames with HSV filtering and gap filling.
         
+        GPU-accelerated HSV conversion when available.
         Supports caching: if SAVE_PREPROCESSED_FRAMES=True and cache exists, loads from cache.
         Otherwise processes frames and saves cache if flag is True.
         
@@ -706,6 +720,7 @@ class LaneDetector:
         """
         from tqdm import tqdm
         from .preprocess_frames import preprocess_frame_hsv
+        import time
         
         # Check if cached frames exist
         cache_path = os.path.join(self.output_dir, 'preprocessed_frames.npz')
@@ -713,8 +728,12 @@ class LaneDetector:
             print(f"  Loading preprocessed frames from cache: {os.path.basename(cache_path)}")
             data = np.load(cache_path)
             preprocessed_frames = [data[f'frame_{i}'] for i in range(len(data.files))]
-            print(f"  ✓ Loaded {len(preprocessed_frames)} frames from cache (skipped ~4 min processing!)")
+            print(f"  ✓ Loaded {len(preprocessed_frames)} frames from cache (skipped processing!)")
             return preprocessed_frames
+        
+        # Process frames with GPU acceleration
+        start_time = time.perf_counter()
+        use_gpu = getattr(self.config, 'USE_GPU', True)
         
         preprocessed = []
         with tqdm(total=len(frames), desc="  Preprocessing frames") as pbar:
@@ -724,10 +743,16 @@ class LaneDetector:
                     self.config.MAX_PATCH_SIZE_ROW,
                     self.config.MAX_PATCH_SIZE_COL,
                     self.config.TOP_REGION_RATIO,
-                    self.config.MAX_TOP_PATCH_AREA
+                    self.config.MAX_TOP_PATCH_AREA,
+                    use_gpu=use_gpu,
+                    gpu_accelerator=self.gpu_accelerator
                 )
                 preprocessed.append(processed)
                 pbar.update(1)
+        
+        elapsed = time.perf_counter() - start_time
+        fps = len(frames) / elapsed
+        print(f"  ✓ Preprocessed {len(frames)} frames in {elapsed:.1f}s ({fps:.1f} fps)")
         
         # Save cache if flag is True
         if self.config.SAVE_PREPROCESSED_FRAMES:
@@ -744,9 +769,33 @@ class LaneDetector:
     def _detect_top_boundary_from_frames(self, frames):
         """
         Internal: Detect top boundary from frame array.
+        GPU-accelerated Sobel operations when available.
         """
         from tqdm import tqdm
         from .top_boundary_detection import detect_top_boundary_sobel
+        import time
+        
+        use_gpu = getattr(self.config, 'USE_GPU', True)
+        detections = []
+        
+        start_time = time.perf_counter()
+        
+        with tqdm(total=len(frames), desc="  Detecting edges") as pbar:
+            for frame in frames:
+                detection = detect_top_boundary_sobel(
+                    frame, 
+                    self.config, 
+                    use_gpu=use_gpu,
+                    gpu_accelerator=self.gpu_accelerator
+                )
+                detections.append(detection)
+                pbar.update(1)
+        
+        elapsed = time.perf_counter() - start_time
+        fps = len(frames) / elapsed
+        print(f"  ✓ Detected top boundary in {elapsed:.1f}s ({fps:.1f} fps)")
+        
+        return detections
         
         detections = []
         with tqdm(total=len(frames), desc="  Detecting boundaries") as pbar:

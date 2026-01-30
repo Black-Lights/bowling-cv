@@ -1,6 +1,8 @@
 """
 Top boundary detection using Sobel edge detection
 Finds the topmost strong horizontal line in the pin area
+
+GPU-accelerated Sobel operations when available
 """
 
 import cv2
@@ -11,15 +13,20 @@ import subprocess
 import matplotlib.pyplot as plt
 from sklearn.linear_model import RANSACRegressor
 from sklearn.preprocessing import PolynomialFeatures
+from .gpu_utils import get_gpu_accelerator, get_performance_tracker
 
 
-def detect_top_boundary_sobel(frame, config):
+def detect_top_boundary_sobel(frame, config, use_gpu=True, gpu_accelerator=None):
     """
     Detect top boundary using Sobel edge detection to find topmost strong horizontal line.
+    
+    GPU-accelerated Sobel operations when available.
     
     Args:
         frame: Preprocessed frame (BGR format)
         config: Configuration module with thresholds
+        use_gpu: Whether to use GPU acceleration (default: True)
+        gpu_accelerator: Existing GPUAccelerator instance (optional, creates new if None)
     
     Returns:
         Dictionary containing:
@@ -29,12 +36,21 @@ def detect_top_boundary_sobel(frame, config):
             - 'edge_strength': Average edge strength
             - 'points_sampled': Number of boundary points found
     """
+    # Get GPU accelerator (create if not provided)
+    if gpu_accelerator is None and use_gpu:
+        gpu_accelerator = get_gpu_accelerator(use_gpu=True, verbose=False)
+    
     # Convert to grayscale
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     height, width = gray.shape
     
-    # Apply Sobel for horizontal edges
-    sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=config.SOBEL_KERNEL_SIZE)
+    # Apply Sobel for horizontal edges (GPU-accelerated if available)
+    if use_gpu and gpu_accelerator is not None and gpu_accelerator.use_gpu:
+        sobel_y = gpu_accelerator.Sobel(gray, 0, 1, ksize=config.SOBEL_KERNEL_SIZE)
+        sobel_y = sobel_y.astype(np.float64)
+    else:
+        sobel_y = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=config.SOBEL_KERNEL_SIZE)
+    
     sobel_y = np.abs(sobel_y)
     
     # Define search region

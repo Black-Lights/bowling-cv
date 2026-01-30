@@ -2,6 +2,8 @@
 Preprocessing module for lane detection
 Applies HSV color filtering to extract brown and red/orange regions
 Fills small black gaps with original image pixels
+
+GPU-accelerated version for HSV conversion when available
 """
 
 import cv2
@@ -9,6 +11,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 import subprocess
+from .gpu_utils import get_gpu_accelerator, get_performance_tracker
 
 
 def remove_small_colored_patches_top(img, top_region_ratio=0.3, max_patch_area=2000):
@@ -109,10 +112,13 @@ def fill_small_black_patches(masked_img, original_img, max_patch_size_row, max_p
 
 
 def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50, 
-                         top_region_ratio=0.3, max_top_patch_area=2000):
+                         top_region_ratio=0.3, max_top_patch_area=2000, 
+                         use_gpu=True, gpu_accelerator=None):
     """
     Apply HSV color filtering to extract brown and red/orange regions,
     fill small black gaps with original pixels, and remove small colored patches from top.
+    
+    GPU-accelerated HSV conversion when available.
     
     Args:
         frame: Input frame (BGR format)
@@ -121,12 +127,21 @@ def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50,
         top_region_ratio: Ratio of image height to consider as "top region" for patch removal
         max_top_patch_area: Maximum area for top patches - patches smaller than this are removed,
                            larger patches (like pin deck) are kept
+        use_gpu: Whether to use GPU acceleration (default: True)
+        gpu_accelerator: Existing GPUAccelerator instance (optional, creates new if None)
     
     Returns:
         Preprocessed frame with brown/red regions, small gaps filled, and small top patches removed
     """
-    # Convert to HSV
-    hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    # Get GPU accelerator (create if not provided)
+    if gpu_accelerator is None and use_gpu:
+        gpu_accelerator = get_gpu_accelerator(use_gpu=True, verbose=False)
+    
+    # Convert to HSV (GPU-accelerated if available)
+    if use_gpu and gpu_accelerator is not None and gpu_accelerator.use_gpu:
+        hsv_frame = gpu_accelerator.cvtColor_BGR2HSV(frame)
+    else:
+        hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     
     # Brown mask (H: 0-20, S: 0-255, V: 50-255)
     mask_brown = cv2.inRange(hsv_frame, (0, 0, 50), (20, 255, 255))
