@@ -67,15 +67,20 @@ pip install opencv-python numpy scipy pandas matplotlib tqdm scikit-learn
 ### Running Complete Lane Detection (All 4 Boundaries)
 
 ```bash
-# Step 1: Detect bottom, left, and right boundaries
-cd src/lane_detection
+# Run the complete pipeline (uses LaneDetector class)
 python main.py
 
-# Step 2: Detect top boundary with MSAC fitting
-python test_top_detection.py
+# Or specify a video
+python main.py --video cropped_test3.mp4
 ```
 
 **Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
+
+**New Features:**
+- ✅ Frame caching for faster iteration (saves ~4 mins per video)
+- ✅ Small patch removal from top region (cleaner Sobel detection)
+- ✅ Professional class-based architecture (LaneDetector)
+- ✅ Automatic dependency resolution
 
 ---
 
@@ -185,13 +190,16 @@ Edit [`src/lane_detection/config.py`](src/lane_detection/config.py) to customize
 ### Running as a Module
 
 ```python
-from src.lane_detection import (
-    detect_horizontal_line,
-    detect_vertical_boundaries_approach1,
-    compute_master_line_from_collection
-)
+from src.lane_detection import LaneDetector, config
 
-# Your code here...
+# Create detector instance
+detector = LaneDetector('path/to/video.mp4', config)
+
+# Run complete detection pipeline
+boundaries, intersections = detector.detect_all()
+
+# Save results
+detector.save()
 ```
 
 ### Output Files
@@ -212,6 +220,11 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 - **[FIXES.md](docs/FIXES.md)** - Bug fixes and implementation improvements
 - **[PERSPECTIVE_GUIDE.md](docs/PERSPECTIVE_GUIDE.md)** - Perspective correction techniques
 - **[WHATS_NEW.md](docs/WHATS_NEW.md)** - Version history and changes
+
+### Phase 1: Lane Detection
+
+- **[LANE_DETECTOR_GUIDE.md](docs/lane_detection/LANE_DETECTOR_GUIDE.md)** - LaneDetector class usage and architecture
+- **[REFACTOR_SUMMARY.md](docs/lane_detection/REFACTOR_SUMMARY.md)** - Phase 1 refactoring details
 
 ---
 

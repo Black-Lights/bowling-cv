@@ -11,6 +11,49 @@ from tqdm import tqdm
 import subprocess
 
 
+def remove_small_colored_patches_top(img, top_region_ratio=0.3, max_patch_area=2000):
+    """
+    Remove small colored patches from the top portion of the image.
+    Keeps only large colored regions (like the pin deck area).
+    
+    Args:
+        img: Input image (BGR format)
+        top_region_ratio: Ratio of image height to consider as "top region" (0.0 to 1.0)
+        max_patch_area: Maximum area in pixels - patches smaller than this will be removed,
+                        larger patches (like pin deck) will be kept
+    
+    Returns:
+        Image with small colored patches removed from top region
+    """
+    result = img.copy()
+    gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape
+    
+    # Define top region
+    top_height = int(height * top_region_ratio)
+    
+    # Create binary mask of colored pixels in top region
+    top_region_gray = gray[:top_height, :]
+    colored_mask = (top_region_gray > 0).astype(np.uint8) * 255
+    
+    # Find connected components
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(colored_mask, connectivity=8)
+    
+    # Remove small components (keep only large areas like pin deck)
+    for label in range(1, num_labels):  # Skip label 0 (background)
+        area = stats[label, cv2.CC_STAT_AREA]
+        
+        # Remove patches that are smaller than threshold (keep large pin deck area)
+        if area < max_patch_area:
+            # Get component mask
+            component_mask = (labels == label).astype(np.uint8)
+            
+            # Set pixels to black
+            result[:top_height, :][component_mask == 1] = [0, 0, 0]
+    
+    return result
+
+
 def fill_small_black_patches(masked_img, original_img, max_patch_size_row, max_patch_size_col):
     """
     Scan row by row and column by column to replace small black patches with original image pixels.
@@ -65,18 +108,22 @@ def fill_small_black_patches(masked_img, original_img, max_patch_size_row, max_p
     return result
 
 
-def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50):
+def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50, 
+                         top_region_ratio=0.3, max_top_patch_area=2000):
     """
     Apply HSV color filtering to extract brown and red/orange regions,
-    then fill small black gaps with original pixels (both rows and columns).
+    fill small black gaps with original pixels, and remove small colored patches from top.
     
     Args:
         frame: Input frame (BGR format)
         max_patch_size_row: Maximum size of black patch to fill in rows (in pixels)
         max_patch_size_col: Maximum size of black patch to fill in columns (in pixels)
+        top_region_ratio: Ratio of image height to consider as "top region" for patch removal
+        max_top_patch_area: Maximum area for top patches - patches smaller than this are removed,
+                           larger patches (like pin deck) are kept
     
     Returns:
-        Preprocessed frame with brown/red regions and small gaps filled
+        Preprocessed frame with brown/red regions, small gaps filled, and small top patches removed
     """
     # Convert to HSV
     hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -93,8 +140,11 @@ def preprocess_frame_hsv(frame, max_patch_size_row=100, max_patch_size_col=50):
     # Apply mask to original frame
     masked_img = cv2.bitwise_and(frame, frame, mask=combined_mask)
     
-    # Fill small black patches with original image pixels (rows and columns)
-    final_img = fill_small_black_patches(masked_img, frame, max_patch_size_row, max_patch_size_col)
+    # Step 1: Fill small black patches with original image pixels (rows and columns)
+    filled_img = fill_small_black_patches(masked_img, frame, max_patch_size_row, max_patch_size_col)
+    
+    # Step 2: Remove small colored patches from top region (keep only large areas like pin deck)
+    final_img = remove_small_colored_patches_top(filled_img, top_region_ratio, max_top_patch_area)
     
     return final_img
 

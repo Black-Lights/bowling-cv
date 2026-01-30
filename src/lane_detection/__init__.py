@@ -1,25 +1,37 @@
 """
-Lane Detection Module
-Detects bowling lane boundaries, foul lines, and master lines
+Lane Detection Module - Phase 1 Complete Pipeline
+
+Detects all 4 bowling lane boundaries:
+- Bottom: Foul line (horizontal)
+- Left/Right: Master lines (vertical)
+- Top: Pin area boundary (horizontal)
+
+Version: 1.0.0
+Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
+Last Updated: January 30, 2026
 """
 
-from .config import *
-from .detection_utils import *
+# Main API - LaneDetector class
+from .lane_detector import LaneDetector
+
+# Legacy imports for backward compatibility
 from .detection_functions import detect_horizontal_line, detect_vertical_boundaries_approach1
 from .master_line_computation import compute_master_line_from_collection, visualize_bin_analysis
 from .intermediate_visualization import create_intermediate_video
 from .tracking_analysis import analyze_master_line_tracking, plot_master_line_tracking, create_summary_plot
-from .main import save_boundary_data, load_boundary_data
 from .top_boundary_detection import (
-    collect_top_boundary_detections, 
-    plot_detection_results,
-    create_detection_visualization_videos,
-    detect_color_stop,
-    detect_intensity_transition,
-    detect_edge_boundary
+    detect_top_boundary_all_frames,
+    fit_msac_line, 
+    create_visualization_videos,
+    plot_intersection_y_coordinates
 )
 
+__version__ = '1.0.0'
+
 __all__ = [
+    # Main API
+    'LaneDetector',
+    
     # Detection functions
     'detect_horizontal_line',
     'detect_vertical_boundaries_approach1',
@@ -36,15 +48,9 @@ __all__ = [
     'plot_master_line_tracking',
     'create_summary_plot',
     
-    # Boundary data management
-    'save_boundary_data',
-    'load_boundary_data',
-    
     # Top boundary detection
-    'collect_top_boundary_detections',
-    'plot_detection_results',
-    'create_detection_visualization_videos',
-    'detect_color_stop',
-    'detect_intensity_transition',
-    'detect_edge_boundary',
+    'detect_top_boundary_all_frames',
+    'fit_msac_line',
+    'create_visualization_videos',
+    'plot_intersection_y_coordinates',
 ]

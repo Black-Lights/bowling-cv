@@ -4,7 +4,7 @@ Line detection functions for bowling lane analysis
 
 import numpy as np
 import cv2
-from detection_utils import *
+from .detection_utils import *
 
 
 def detect_horizontal_line(img):
