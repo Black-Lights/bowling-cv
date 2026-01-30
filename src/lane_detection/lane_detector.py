@@ -508,6 +508,10 @@ class LaneDetector:
             )
             print(f"  ✅ Saved tracking analysis plot")
         
+        # Generate intermediate videos if configured
+        if self.config.SAVE_INTERMEDIATE_VIDEOS:
+            self._generate_intermediate_videos()
+        
         # Cleanup temporary files
         self._cleanup_temp_files()
         
@@ -874,6 +878,63 @@ class LaneDetector:
             out.release()
             print(f"    ✓ Saved: {os.path.basename(output_path)}")
     
+    
+    def _generate_intermediate_videos(self):
+        """
+        Internal: Generate intermediate visualization videos for debugging.
+        
+        Creates videos showing different processing stages (edges, gaussian, etc.)
+        based on INTERMEDIATE_MODES configuration.
+        """
+        from tqdm import tqdm
+        from .intermediate_visualization import get_horizontal_intermediates, get_vertical_intermediates
+        
+        print(f"\n  Generating intermediate visualization videos...")
+        
+        intermediate_dir = os.path.join(self.output_dir, self.config.INTERMEDIATE_FOLDER)
+        os.makedirs(intermediate_dir, exist_ok=True)
+        
+        # Get video properties
+        cap = cv2.VideoCapture(self.video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        # Process each mode
+        for mode in self.config.INTERMEDIATE_MODES:
+            output_path = os.path.join(intermediate_dir, f"{mode}_{self.video_name}.mp4")
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset to start
+            
+            with tqdm(total=total_frames, desc=f"    Creating {mode} video") as pbar:
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    
+                    # Get intermediate visualization based on mode
+                    if 'horizontal' in mode:
+                        intermediates = get_horizontal_intermediates(frame)
+                        mode_key = mode.replace('_horizontal', '')
+                        vis_frame = intermediates.get(mode_key, frame)
+                    elif 'vertical' in mode:
+                        intermediates = get_vertical_intermediates(frame, self.boundaries.get('bottom'))
+                        mode_key = mode.replace('_vertical', '')
+                        vis_frame = intermediates.get(mode_key, frame)
+                    else:
+                        vis_frame = frame
+                    
+                    out.write(vis_frame)
+                    pbar.update(1)
+            
+            out.release()
+            print(f"    ✓ Saved: {os.path.basename(output_path)}")
+        
+        cap.release()
+        print(f"  ✅ Intermediate videos saved to: {intermediate_dir}\n")
     
     
     def __repr__(self):

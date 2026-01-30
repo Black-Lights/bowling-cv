@@ -26,12 +26,12 @@ VIDEO_FILES = [
 ]
 
 # Output configuration
-SAVE_MASKED_VIDEO = False  # Save masked video (will be deleted after processing if False)
-SAVE_PREPROCESSED_VIDEO = False  # Save preprocessed video (will be deleted after processing if False)
-SAVE_SOBEL_VIDEO = False  # Save Sobel filter visualization video
-SAVE_TOP_MASKED_VIDEO = False  # Save top boundary masked video
-SAVE_COLLECTION_VIDEO = False  # Save collection video for all frames
-SAVE_INTERMEDIATE_VIDEOS = False  # Enable legacy intermediate video debug system (see INTERMEDIATE_MODES below)
+SAVE_MASKED_VIDEO = True  # Save masked video (will be deleted after processing if False)
+SAVE_PREPROCESSED_VIDEO = True  # Save preprocessed video (will be deleted after processing if False)
+SAVE_SOBEL_VIDEO = True  # Save Sobel filter visualization video
+SAVE_TOP_MASKED_VIDEO = True  # Save top boundary masked video
+SAVE_COLLECTION_VIDEO = True  # Save collection video for all frames
+SAVE_INTERMEDIATE_VIDEOS = True  # Enable legacy intermediate video debug system (see INTERMEDIATE_MODES below)
 
 # Frame caching for faster iteration (saves ~4 mins per video during development)
 SAVE_PREPROCESSED_FRAMES = True  # Save preprocessed frames as .npz file for reuse in later phases
