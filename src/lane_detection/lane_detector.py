@@ -282,6 +282,10 @@ class LaneDetector:
                                   os.path.join(self.output_dir, 'bin_analysis_right.png'),
                                   angle_mode)
         
+        # Generate intermediate visualization videos if configured
+        if self.config.SAVE_INTERMEDIATE_VIDEOS:
+            self._generate_intermediate_videos()
+        
         print(f"✅ Side boundaries detected:")
         print(f"   Left: X={master_left['x_intersect']}, Angle={master_left['median_angle']:.1f}°")
         print(f"   Right: X={master_right['x_intersect']}, Angle={master_right['median_angle']:.1f}°")
@@ -874,6 +878,35 @@ class LaneDetector:
             out.release()
             print(f"    ✓ Saved: {os.path.basename(output_path)}")
     
+    
+    def _generate_intermediate_videos(self):
+        """
+        Generate intermediate visualization videos for debugging.
+        
+        Creates videos showing different processing stages for bottom/side detection:
+        - edges_horizontal, edges_vertical
+        - gaussian_vertical, grayscale_vertical
+        - otsu_vertical, mask_vertical
+        """
+        from .intermediate_visualization import create_intermediate_video
+        
+        print(f"\n  Generating intermediate visualization videos...")
+        
+        intermediate_dir = os.path.join(self.output_dir, self.config.INTERMEDIATE_FOLDER)
+        os.makedirs(intermediate_dir, exist_ok=True)
+        
+        for mode in self.config.INTERMEDIATE_MODES:
+            output_path = os.path.join(intermediate_dir, f'{mode}_{self.video_name}.mp4')
+            print(f"    Creating {mode} video...")
+            create_intermediate_video(
+                self.video_path, 
+                output_path, 
+                mode, 
+                detect_horizontal_line
+            )
+            print(f"    ✓ Saved: {os.path.basename(output_path)}")
+        
+        print(f"  ✓ All intermediate videos saved to {intermediate_dir}\n")
     
     
     def __repr__(self):
