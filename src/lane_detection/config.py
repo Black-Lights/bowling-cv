@@ -22,7 +22,9 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'output')
 VIDEO_FILES = [
     'cropped_test3.mp4',
     'cropped_test6.mp4',
-    'cropped_test7.mp4'
+    'cropped_test7.mp4',
+    'cropped_test9.mp4',
+    'cropped_test10.mp4'
 ]
 
 # Output configuration

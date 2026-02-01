@@ -16,7 +16,7 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Detection** - 🔄 **IN PROGRESS** (Video Masking Complete)  
+**Phase 2: Ball Detection** - 🔄 **IN PROGRESS** (Masking + Homography Complete)  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
 **Phase 4: Spin/Rotation Analysis** - Planned  
 **Phase 5: Pin Detection** - Planned
@@ -116,7 +116,9 @@ bowling-cv/
 │       ├── __init__.py
 │       ├── config.py              # Ball detection configuration
 │       ├── main.py                # Ball detection entry point
-│       └── mask_video.py          # Video masking for ball focus
+│       ├── mask_video.py          # Video masking for ball focus
+│       ├── homography.py          # 2D homography calculation (DLT)
+│       └── transform_video.py     # Perspective transformation to overhead view
 │
 ├── output/                        # Generated outputs
 │   └── <video_name>/
@@ -161,6 +163,14 @@ bowling-cv/
   - 4-side masking (top, bottom, left, right)
   - Two modes: video file or frame generator
   - Memory-efficient frame processing
+  - Foul line area properly excluded (30px cutoff)
+- **2D Homography & Perspective Transformation** ✅ COMPLETE
+  - Direct Linear Transform (DLT) for homography calculation
+  - Perspective transformation to overhead view
+  - Uniform scaling (20 px/in) preserves circular shapes
+  - Auto-crop to remove black borders
+  - High-quality encoding (PNG frames + yuv444p)
+  - Real-world dimensions: 60 ft × 41.5 in bowling lane
 - **Ball Detection** (Next)
   - Color-based detection
   - Motion-based detection
@@ -193,14 +203,30 @@ bowling-cv/
 ---
 
 ## Usage Guide
-Phase 2: Ball Detection (Video Masking)
+
+### Phase 1: Complete Lane Detection
 
 ```bash
-# Run ball detection (currently: video masking step)
+# Run the complete pipeline (uses LaneDetector class)
+python main.py
+
+# Or specify a video
+python main.py --video cropped_test3.mp4
+```
+
+**Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
+
+### Phase 2: Ball Detection (Masking + Homography)
+
+```bash
+# Run ball detection pipeline (masking → homography → transformation)
 python -m src.ball_detection.main --video cropped_test3.mp4
 ```
 
-**Output:** Masked video focusing only on lane area at `output/<video_name>/ball_detection/intermediate/`
+**Outputs:**
+- `output/<video_name>/ball_detection/cropped_<video>_lane_masked.mp4` - 4-side masked video
+- `output/<video_name>/ball_detection/cropped_<video>_transformed.mp4` - Overhead perspective view
+- Both videos exclude foul line area for clean ball tracking
 
 ### Using as a Module
 
@@ -218,31 +244,24 @@ boundaries, intersections = detector.detect_all()
 **Phase 2: Ball Detection (Frame Generator)**
 ```python
 from src.ball_detection.mask_video import create_masked_lane_video
+from src.ball_detection.homography import calculate_homography, apply_perspective_transform
 from src.ball_detection import config
 
 # Get masked frames generator (no video file created - memory efficient!)
 frames_gen = create_masked_lane_video('video.mp4', config, save_video=False)
 
-# Process each masked frame directly
+# Calculate homography matrix once
+H = calculate_homography('video.mp4', scale=20, auto_crop=True)
+
+# Process each masked frame with perspective correction
 for frame_idx, masked_frame, metadata in frames_gen:
-    # Detect ball in masked_frame
-    ball_position = detect_ball(masked_frame)
+    # Transform to overhead view
+    overhead_frame = apply_perspective_transform(masked_frame, H['matrix'], 
+                                                 H['width'], H['height'])
+    # Detect ball in overhead_frame (circular, uniform scale)
+    ball_position = detect_ball(overhead_frame)
     # Process trajectory
-    trajectory.append(ball_positionRAMES`
-
-### Running as a Module
-
-```python
-from src.lane_detection import LaneDetector, config
-
-# Create detector instance
-detector = LaneDetector('path/to/video.mp4', config)
-
-# Run complete detection pipeline
-boundaries, intersections = detector.detect_all()
-
-# Save results
-detector.save()
+    trajectory.append(ball_position)
 ```
 
 ### Output Files

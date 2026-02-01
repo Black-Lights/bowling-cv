@@ -14,6 +14,8 @@ import os
 import cv2
 import numpy as np
 import json
+import subprocess
+import shutil
 from pathlib import Path
 from typing import Dict, Tuple, Optional, List
 
@@ -431,7 +433,12 @@ class LaneDetector:
         # Solve for y when line is at specific Y
         
         # Top-Left: Where does left master line cross top boundary?
-        top_left_y = (self.boundaries['top']['line_left'][0] - left_x_intersect) / left_slope if left_slope != 0 else top_y
+        if left_slope == 0 or left_slope == float('inf') or left_slope == float('-inf'):
+            # Vertical or horizontal line - use top Y directly
+            top_left_y = top_y
+        else:
+            top_left_y = (self.boundaries['top']['line_left'][0] - left_x_intersect) / left_slope
+        
         self.intersections['top_left'] = {
             'x': self.boundaries['top']['line_left'][0],
             'y': int(top_left_y),
@@ -439,7 +446,12 @@ class LaneDetector:
         }
         
         # Top-Right: Where does right master line cross top boundary?
-        top_right_y = (self.boundaries['top']['line_right'][0] - right_x_intersect) / right_slope if right_slope != 0 else top_y
+        if right_slope == 0 or right_slope == float('inf') or right_slope == float('-inf'):
+            # Vertical or horizontal line - use top Y directly
+            top_right_y = top_y
+        else:
+            top_right_y = (self.boundaries['top']['line_right'][0] - right_x_intersect) / right_slope
+        
         self.intersections['top_right'] = {
             'x': self.boundaries['top']['line_right'][0],
             'y': int(top_right_y),
@@ -448,14 +460,25 @@ class LaneDetector:
         
         # Bottom intersections (foul line ∩ master lines)
         # Calculate X where master line crosses foul line Y
-        bottom_left_x = int(left_x_intersect + bottom_y * left_slope)
+        
+        # Handle infinite slope (vertical line) - X doesn't change with Y
+        if left_slope == float('inf') or left_slope == float('-inf'):
+            bottom_left_x = int(left_x_intersect)
+        else:
+            bottom_left_x = int(left_x_intersect + bottom_y * left_slope)
+        
         self.intersections['bottom_left'] = {
             'x': bottom_left_x,
             'y': bottom_y,
             'description': 'Bottom boundary (foul) ∩ Left master line'
         }
         
-        bottom_right_x = int(right_x_intersect + bottom_y * right_slope)
+        # Handle infinite slope (vertical line) - X doesn't change with Y
+        if right_slope == float('inf') or right_slope == float('-inf'):
+            bottom_right_x = int(right_x_intersect)
+        else:
+            bottom_right_x = int(right_x_intersect + bottom_y * right_slope)
+        
         self.intersections['bottom_right'] = {
             'x': bottom_right_x,
             'y': bottom_y,
@@ -686,6 +709,12 @@ class LaneDetector:
                 # Apply mask
                 mask = np.zeros((height, width), dtype=np.uint8)
                 cv2.fillPoly(mask, [polygon], 255)
+                
+                # Black out everything below the foul line (including foul line markers)
+                foul_y = self.boundaries['bottom']['center_y']
+                mask_cutoff = int(foul_y - 30)  # Start masking 30 pixels above foul line
+                mask[mask_cutoff:, :] = 0  # Set all rows from cutoff to bottom as black
+                
                 masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
                 
                 masked_frames.append(masked_frame)
@@ -821,10 +850,11 @@ class LaneDetector:
         # Final video (always)
         videos_to_create.append(('final', os.path.join(self.output_dir, f'final_all_boundaries_{self.video_name}.mp4')))
         
-        # Generate frames for each video type
+        # Generate frames for each video type using temp directory + ffmpeg
         for video_type, output_path in videos_to_create:
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+            # Create temp directory for frames
+            temp_dir = output_path.replace('.mp4', '_temp_frames')
+            os.makedirs(temp_dir, exist_ok=True)
             
             with tqdm(total=len(preprocessed_frames), desc=f"  Creating {video_type} video") as pbar:
                 for i, (preprocessed_frame, detection) in enumerate(zip(preprocessed_frames, detections)):
@@ -872,10 +902,31 @@ class LaneDetector:
                         top_y = int(msac_line['y_position'])
                         cv2.line(vis_frame, (0, top_y), (width-1, top_y), (0, 255, 0), 2)
                     
-                    out.write(vis_frame)
+                    # Save frame as PNG
+                    frame_path = os.path.join(temp_dir, f'frame_{i:05d}.png')
+                    cv2.imwrite(frame_path, vis_frame)
                     pbar.update(1)
             
-            out.release()
+            # Combine frames with ffmpeg
+            ffmpeg_cmd = [
+                'ffmpeg', '-y',
+                '-framerate', str(fps),
+                '-i', os.path.join(temp_dir, 'frame_%05d.png'),
+                '-c:v', 'libx264',
+                '-pix_fmt', 'yuv420p',
+                '-preset', 'fast',
+                '-crf', '23',
+                output_path
+            ]
+            
+            try:
+                subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=True)
+                print(f"    ✓ Saved: {os.path.basename(output_path)}")
+            except subprocess.CalledProcessError as e:
+                print(f"    ✗ ffmpeg error: {e.stderr}")
+            
+            # Clean up temp frames
+            shutil.rmtree(temp_dir)
             print(f"    ✓ Saved: {os.path.basename(output_path)}")
     
     

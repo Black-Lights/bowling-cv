@@ -32,8 +32,8 @@ def create_transformed_video(video_path: str, config):
     """
     Create perspective-corrected video of the bowling lane.
     
-    Applies homography transformation to convert tilted lane view to
-    overhead rectangular view matching real-world dimensions.
+    Applies homography transformation to MASKED frames to convert tilted 
+    lane view to overhead rectangular view matching real-world dimensions.
     
     Args:
         video_path (str): Path to input video
@@ -99,24 +99,34 @@ def create_transformed_video(video_path: str, config):
             print(f"  {labels[i]:12}: ({corner[0]:6.1f}, {corner[1]:6.1f})")
         
         print(f"\nOutput dimensions:")
-        scale = config.TRANSFORM_SCALE
-        output_width = int(LANE_WIDTH_INCHES * scale)
-        output_height = int(LANE_LENGTH_INCHES * scale)
-        print(f"  Scale: {scale} pixels/inch")
+        scale_width = getattr(config, 'TRANSFORM_SCALE_WIDTH', config.TRANSFORM_SCALE if hasattr(config, 'TRANSFORM_SCALE') else 10)
+        scale_height = getattr(config, 'TRANSFORM_SCALE_HEIGHT', config.TRANSFORM_SCALE if hasattr(config, 'TRANSFORM_SCALE') else 10)
+        output_width = int(LANE_WIDTH_INCHES * scale_width)
+        output_height = int(LANE_LENGTH_INCHES * scale_height)
+        # Ensure divisible by 2
+        if output_width % 2 != 0:
+            output_width += 1
+        if output_height % 2 != 0:
+            output_height += 1
+        print(f"  Scale: {scale_width} px/in (width), {scale_height} px/in (height)")
         print(f"  Width: {output_width} pixels ({LANE_WIDTH_INCHES} inches)")
         print(f"  Height: {output_height} pixels ({LANE_LENGTH_INCHES} inches)")
+        print(f"  Aspect ratio: {output_width}:{output_height} (~1:{output_height/output_width:.1f})")
     
-    # Open video
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise IOError(f"Could not open video: {video_path}")
+    # Get masked frames generator (don't save video, just get frames)
+    if config.VERBOSE:
+        print(f"\nGetting masked frames for transformation...")
     
-    # Get video properties
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # Import mask_video here to avoid circular import
+    from ball_detection.mask_video import create_masked_lane_video
     
-    # Calculate output dimensions
-    scale = config.TRANSFORM_SCALE
+    # Get frame generator (save_video=False for memory efficiency)
+    masked_frames_gen = create_masked_lane_video(video_path, config, save_video=False)
+    
+    # Get scale factor from config (same for both dimensions to preserve aspect ratio)
+    scale = getattr(config, 'TRANSFORM_SCALE', 10)
+    auto_crop = getattr(config, 'AUTO_CROP_TRANSFORMED', True)
+    
     output_width = int(LANE_WIDTH_INCHES * scale)
     output_height = int(LANE_LENGTH_INCHES * scale)
     
@@ -127,43 +137,72 @@ def create_transformed_video(video_path: str, config):
         output_height += 1
     
     if config.VERBOSE:
-        print(f"\nTransforming {total_frames} frames...")
+        print(f"\nOutput dimensions:")
+        print(f"  Scale: {scale} px/in (uniform - preserves shapes)")
+        print(f"  Width: {output_width} pixels ({LANE_WIDTH_INCHES} inches)")
+        print(f"  Height: {output_height} pixels ({LANE_LENGTH_INCHES} inches)")
+        print(f"  Aspect ratio: {output_width}:{output_height} (~{output_width/output_height:.1f}:1)")
+        print(f"  Auto-crop: {'Enabled' if auto_crop else 'Disabled'}")
+        print()
+        print(f"Transforming masked frames...")
     
     # Create temp directory for frames
     output_path = os.path.join(intermediate_dir, f'{video_name}_transformed.mp4')
     temp_dir = output_path.replace('.mp4', '_frames')
     os.makedirs(temp_dir, exist_ok=True)
     
-    # Transform frames
-    frame_count = 0
-    for i in tqdm(range(total_frames), desc="Transforming frames", disable=not config.VERBOSE):
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        # Apply perspective transformation
-        transformed = apply_perspective_transform(frame, H, output_width, output_height)
-        
-        # Save frame
-        frame_path = os.path.join(temp_dir, f"frame_{i:05d}.jpg")
-        cv2.imwrite(frame_path, transformed, [cv2.IMWRITE_JPEG_QUALITY, 95])
-        frame_count += 1
+    # Get metadata from first frame
+    first_frame_data = next(masked_frames_gen)
+    frame_idx, first_masked_frame, metadata = first_frame_data
+    fps = metadata['fps']
+    total_frames = metadata['total_frames']
     
-    cap.release()
+    # Transform first frame (auto_crop already defined above)
+    transformed = apply_perspective_transform(first_masked_frame, H, output_width, output_height, auto_crop=auto_crop)
+    
+    # Get actual dimensions
+    actual_height, actual_width = transformed.shape[:2]
+    
+    if config.VERBOSE:
+        if auto_crop:
+            print(f"  Cropped dimensions: {actual_width}x{actual_height} (removed black borders)")
+        else:
+            print(f"  Output dimensions: {actual_width}x{actual_height}")
+    
+    frame_path = os.path.join(temp_dir, f"frame_{frame_idx:05d}.png")
+    cv2.imwrite(frame_path, transformed)  # PNG is lossless, no quality parameter needed
+    frame_count = 1
+    
+    # Transform remaining frames with progress bar
+    for frame_idx, masked_frame, _ in tqdm(masked_frames_gen, 
+                                           desc="Transforming frames", 
+                                           total=total_frames-1,
+                                           disable=not config.VERBOSE):
+        # Apply perspective transformation
+        transformed = apply_perspective_transform(masked_frame, H, output_width, output_height, auto_crop=auto_crop)
+        
+        # Save frame as PNG (lossless)
+        frame_path = os.path.join(temp_dir, f"frame_{frame_idx:05d}.png")
+        cv2.imwrite(frame_path, transformed)
+        frame_count += 1
     
     if config.VERBOSE:
         print(f"Transformed {frame_count} frames")
         print(f"\nCombining frames with ffmpeg...")
     
-    # Use ffmpeg to combine frames into video
+    # Use ffmpeg to combine frames into video with high quality encoding
+    # yuv444p prevents chroma subsampling artifacts (purple patches) on narrow videos
     ffmpeg_cmd = [
         'ffmpeg',
         '-y',  # Overwrite output
         '-framerate', str(fps),
-        '-i', os.path.join(temp_dir, 'frame_%05d.jpg'),
+        '-i', os.path.join(temp_dir, 'frame_%05d.png'),  # PNG input (lossless)
         '-c:v', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-crf', '18',  # High quality
+        '-pix_fmt', 'yuv444p',  # No chroma subsampling (prevents purple artifacts)
+        '-preset', 'veryslow',  # Best compression quality
+        '-crf', '15',  # Near-lossless quality
+        '-profile:v', 'high444',  # Required for yuv444p
+        '-tune', 'film',  # Optimize for high quality video content
         output_path
     ]
     
@@ -180,16 +219,15 @@ def create_transformed_video(video_path: str, config):
         
         # Fallback to OpenCV if ffmpeg not available
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        out = cv2.VideoWriter(output_path, fourcc, fps, (output_width, output_height))
+        out = cv2.VideoWriter(output_path, fourcc, fps, (actual_width, actual_height))
         
         if not out.isOpened():
             print("Error: Could not initialize VideoWriter!")
-            cap.release()
             return None
         
         # Re-read and write frames
         for i in range(frame_count):
-            frame_path = os.path.join(temp_dir, f"frame_{i:05d}.jpg")
+            frame_path = os.path.join(temp_dir, f"frame_{i:05d}.png")
             frame = cv2.imread(frame_path)
             out.write(frame)
         
@@ -224,8 +262,8 @@ def create_transformed_video(video_path: str, config):
             'video_name': video_name,
             'homography_matrix': H.tolist(),
             'dimensions': {
-                'width': output_width,
-                'height': output_height,
+                'width': actual_width,
+                'height': actual_height,
                 'width_inches': LANE_WIDTH_INCHES,
                 'height_inches': LANE_LENGTH_INCHES
             },

@@ -138,7 +138,8 @@ def calculate_homography(boundary_data):
     return H, corners_image, corners_real
 
 
-def apply_perspective_transform(frame, H, output_width=None, output_height=None):
+def apply_perspective_transform(frame, H, output_width=None, output_height=None, 
+                               scale=None, auto_crop=True):
     """
     Apply perspective transformation to a frame using homography matrix.
     
@@ -149,23 +150,58 @@ def apply_perspective_transform(frame, H, output_width=None, output_height=None)
     H : numpy.ndarray
         3x3 homography matrix
     output_width : int, optional
-        Width of output frame. If None, uses lane width in pixels (scaled)
+        Width of output frame. If None, uses scale
     output_height : int, optional
-        Height of output frame. If None, uses lane length in pixels (scaled)
+        Height of output frame. If None, uses scale
+    scale : float, optional
+        Pixels per inch (same for both dimensions). Default: 10
+    auto_crop : bool, optional
+        If True, automatically crops to remove black borders. Default: True
         
     Returns:
     --------
-    numpy.ndarray : Transformed frame
+    numpy.ndarray : Transformed frame (cropped if auto_crop=True)
     """
-    # Default output size: scale real-world dimensions to reasonable pixel size
-    # Use 10 pixels per inch for good resolution
+    # Default output size: use same scale for both to preserve aspect ratio
+    if scale is None:
+        scale = 10  # Default: 10 pixels/inch (uniform)
+        
     if output_width is None:
-        output_width = int(LANE_WIDTH_INCHES * 10)  # ~415 pixels
+        output_width = int(LANE_WIDTH_INCHES * scale)
+        
     if output_height is None:
-        output_height = int(LANE_LENGTH_INCHES * 10)  # ~7200 pixels
+        output_height = int(LANE_LENGTH_INCHES * scale)
+    
+    # Ensure divisible by 2
+    if output_width % 2 != 0:
+        output_width += 1
+    if output_height % 2 != 0:
+        output_height += 1
     
     # Apply perspective warp
     transformed = cv2.warpPerspective(frame, H, (output_width, output_height))
+    
+    # Auto-crop to remove black borders
+    if auto_crop:
+        # Convert to grayscale to find non-black regions
+        gray = cv2.cvtColor(transformed, cv2.COLOR_BGR2GRAY)
+        
+        # Find all non-zero pixels
+        coords = cv2.findNonZero(gray)
+        
+        if coords is not None:
+            # Get bounding rectangle of non-zero pixels
+            x, y, w, h = cv2.boundingRect(coords)
+            
+            # Crop to this region
+            transformed = transformed[y:y+h, x:x+w]
+            
+            # Ensure final dimensions are divisible by 2
+            h, w = transformed.shape[:2]
+            if w % 2 != 0:
+                transformed = transformed[:, :w-1]
+            if h % 2 != 0:
+                transformed = transformed[:h-1, :]
     
     return transformed
 

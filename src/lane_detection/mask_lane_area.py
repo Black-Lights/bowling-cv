@@ -38,8 +38,8 @@ def create_lane_mask(frame_shape, master_left, master_right, median_foul_params,
     # Create blank mask (all black)
     mask = np.zeros((height, width), dtype=np.uint8)
     
-    # Get bottom boundary position
-    foul_y = median_foul_params['center_y']
+    # Get bottom boundary position (keep at actual foul line for polygon shape)
+    foul_y = int(median_foul_params['center_y'])
     
     # Determine top boundary position
     if top_boundary is not None:
@@ -82,6 +82,11 @@ def create_lane_mask(frame_shape, master_left, master_right, median_foul_params,
     
     # Fill the polygon with white (255 = keep this area)
     cv2.fillPoly(mask, [polygon_points], 255)
+    
+    # Black out everything BELOW the foul line (including foul line markers)
+    # This ensures foul line dots are completely masked out
+    mask_cutoff = int(foul_y - 30)  # Start masking 30 pixels above foul line
+    mask[mask_cutoff:, :] = 0  # Set all rows from cutoff to bottom as black
     
     return mask
 

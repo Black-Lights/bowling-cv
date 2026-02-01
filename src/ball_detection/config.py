@@ -22,7 +22,9 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'output')
 VIDEO_FILES = [
     'cropped_test3.mp4',
     'cropped_test6.mp4',
-    'cropped_test7.mp4'
+    'cropped_test7.mp4',
+    'cropped_test9.mp4',
+    'cropped_test10.mp4'
 ]
 
 # ============================================
@@ -44,9 +46,17 @@ SAVE_TRANSFORMED_VIDEO = True  # True to create transformed video
 # ============================================
 
 # Pixels per inch for transformed video
+# IMPORTANT: Use SAME scale for width and height to preserve shapes (circles stay circles)
 # Higher = better resolution but larger file size
-# 10 = good balance (~415x7200 pixels)
-TRANSFORM_SCALE = 10
+TRANSFORM_SCALE = 20  # Pixels per inch (same for both dimensions to avoid distortion)
+# This gives: 41.5in × 20 = 830px width, 720in × 20 = 14400px height
+
+# Auto-crop transformed frames to remove black borders
+AUTO_CROP_TRANSFORMED = True  # Crop to actual lane content
+                              # This gives ~1:1.7 aspect ratio instead of 1:17
+
+# Alternative: Use same scale for both (true proportions but very tall)
+# TRANSFORM_SCALE = 10  # Would give 415x7200 (too thin to view)
 
 # ============================================
 # DEBUG & LOGGING
