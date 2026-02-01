@@ -178,14 +178,23 @@ bowling-cv/
   - Morphological opening for noise removal (3×3 ellipse kernel)
   - Intermediate videos: foreground mask, shadow removed, denoised
   - 2×2 comparison video for debugging
-- **Ball Detection** (Next)
-  - Color-based detection
-  - Hough circle detection
-  - ROI (Region of Interest) logic
-- **Ball Tracking** (Upcoming)
-  - Frame-to-frame tracking
-  - Trajectory extraction
-  - Smoothing algorithms
+- **ROI Logic & Tracking (Kalman Filter)** ✅ COMPLETE
+  - Dual-mode tracking: Global Search + Local Tracking
+  - OpenCV Kalman Filter (4-state: x, y, vx, vy)
+  - Perspective-aware dynamic ROI sizing: B_t = max(30px, 0.15 * y_ball)
+  - Global search: prioritizes foul line + negative Y velocity filtering
+  - Local tracking: searches within predicted ROI box
+  - 10-frame timeout before reverting to global search
+  - 6 intermediate videos: global search, local tracking, Kalman predictions, mode comparison, scaling demo, full pipeline
+- **Ball Filtering (Blob Analysis)** (Next - Stage D)
+  - Circularity filter (C > 0.65)
+  - Aspect ratio validation (< 2.0)
+  - Size constraints (MIN/MAX radius)
+  - Hand vs. ball discrimination
+- **Trajectory Extraction** (Upcoming)
+  - Ball position time series
+  - Velocity and acceleration analysis
+  - Path smoothing algorithms
 
 ### Planned (Phase 3+)
 - **3D Trajectory Reconstruction**
@@ -223,14 +232,14 @@ python main.py --video cropped_test3.mp4
 
 **Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
 
-### Phase 2: Ball Detection (Masking + Homography + Motion Detection)
+### Phase 2: Ball Detection (Masking + Homography + Motion Detection + ROI Tracking)
 
 ```bash
-# Run complete ball detection pipeline (all 3 steps)
+# Run complete ball detection pipeline (all steps)
 python -m src.ball_detection.main --video cropped_test3.mp4
 
 # Or skip specific steps
-python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --skip-transform
+python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --skip-transform --skip-motion
 ```
 
 **Outputs:**
@@ -240,6 +249,13 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --ski
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_shadow_removed.mp4` - After shadow threshold
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_denoised.mp4` - Final clean mask
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_motion_comparison.mp4` - 2×2 comparison
+- **Stage C ROI Tracking Videos (6 total):**
+  - `cropped_<video>_roi_global_search.mp4` - Global search mode visualization
+  - `cropped_<video>_roi_local_tracking.mp4` - Local tracking mode visualization
+  - `cropped_<video>_kalman_prediction.mp4` - Kalman filter predictions
+  - `cropped_<video>_roi_mode_comparison.mp4` - Side-by-side mode comparison
+  - `cropped_<video>_roi_scaling_demo.mp4` - Perspective-aware ROI scaling
+  - `cropped_<video>_full_roi_pipeline.mp4` - 2×3 grid showing all stages
 
 ### Using as a Module
 
