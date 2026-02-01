@@ -118,7 +118,8 @@ bowling-cv/
 │       ├── main.py                # Ball detection entry point
 │       ├── mask_video.py          # Video masking for ball focus
 │       ├── homography.py          # 2D homography calculation (DLT)
-│       └── transform_video.py     # Perspective transformation to overhead view
+│       ├── transform_video.py     # Perspective transformation to overhead view
+│       └── motion_detection.py    # MOG2 background subtraction (Stage B)
 │
 ├── output/                        # Generated outputs
 │   └── <video_name>/
@@ -171,10 +172,16 @@ bowling-cv/
   - Auto-crop to remove black borders
   - High-quality encoding (PNG frames + yuv444p)
   - Real-world dimensions: 60 ft × 41.5 in bowling lane
+- **Motion Detection (Background Subtraction)** ✅ COMPLETE
+  - MOG2 (Mixture of Gaussians) background subtractor
+  - Shadow removal (threshold grey pixels at 127)
+  - Morphological opening for noise removal (3×3 ellipse kernel)
+  - Intermediate videos: foreground mask, shadow removed, denoised
+  - 2×2 comparison video for debugging
 - **Ball Detection** (Next)
   - Color-based detection
-  - Motion-based detection
   - Hough circle detection
+  - ROI (Region of Interest) logic
 - **Ball Tracking** (Upcoming)
   - Frame-to-frame tracking
   - Trajectory extraction
@@ -216,17 +223,23 @@ python main.py --video cropped_test3.mp4
 
 **Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
 
-### Phase 2: Ball Detection (Masking + Homography)
+### Phase 2: Ball Detection (Masking + Homography + Motion Detection)
 
 ```bash
-# Run ball detection pipeline (masking → homography → transformation)
+# Run complete ball detection pipeline (all 3 steps)
 python -m src.ball_detection.main --video cropped_test3.mp4
+
+# Or skip specific steps
+python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --skip-transform
 ```
 
 **Outputs:**
-- `output/<video_name>/ball_detection/cropped_<video>_lane_masked.mp4` - 4-side masked video
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
 - `output/<video_name>/ball_detection/cropped_<video>_transformed.mp4` - Overhead perspective view
-- Both videos exclude foul line area for clean ball tracking
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_foreground_mask.mp4` - MOG2 output
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_shadow_removed.mp4` - After shadow threshold
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_denoised.mp4` - Final clean mask
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_motion_comparison.mp4` - 2×2 comparison
 
 ### Using as a Module
 
@@ -241,26 +254,23 @@ detector = LaneDetector('path/to/video.mp4', config)
 boundaries, intersections = detector.detect_all()
 ```
 
-**Phase 2: Ball Detection (Frame Generator)**
+**Phase 2: Ball Detection (Motion Detection with MOG2)**
 ```python
 from src.ball_detection.mask_video import create_masked_lane_video
-from src.ball_detection.homography import calculate_homography, apply_perspective_transform
+from src.ball_detection.motion_detection import apply_background_subtraction
 from src.ball_detection import config
 
-# Get masked frames generator (no video file created - memory efficient!)
+# Get masked frames generator
 frames_gen = create_masked_lane_video('video.mp4', config, save_video=False)
 
-# Calculate homography matrix once
-H = calculate_homography('video.mp4', scale=20, auto_crop=True)
+# Apply motion detection (MOG2 + shadow removal + denoising)
+motion_gen = apply_background_subtraction(frames_gen, config, save_videos=False)
 
-# Process each masked frame with perspective correction
-for frame_idx, masked_frame, metadata in frames_gen:
-    # Transform to overhead view
-    overhead_frame = apply_perspective_transform(masked_frame, H['matrix'], 
-                                                 H['width'], H['height'])
-    # Detect ball in overhead_frame (circular, uniform scale)
-    ball_position = detect_ball(overhead_frame)
-    # Process trajectory
+# Process each denoised frame
+for frame_idx, denoised_mask, metadata, intermediate_masks in motion_gen:
+    # denoised_mask is the clean binary mask (ball = white, background = black)
+    # Find ball contours and extract position
+    ball_position = detect_ball_from_mask(denoised_mask)
     trajectory.append(ball_position)
 ```
 

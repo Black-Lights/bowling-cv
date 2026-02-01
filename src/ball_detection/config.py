@@ -59,6 +59,32 @@ AUTO_CROP_TRANSFORMED = True  # Crop to actual lane content
 # TRANSFORM_SCALE = 10  # Would give 415x7200 (too thin to view)
 
 # ============================================
+# STAGE B: MOTION DETECTION (BACKGROUND SUBTRACTION)
+# ============================================
+
+# Background Subtraction Method
+USE_MOG2 = True  # Use MOG2 (Mixture of Gaussians) for background subtraction
+
+# MOG2 Parameters
+MOG2_HISTORY = 500  # Number of frames for background learning (higher = slower adaptation)
+MOG2_VAR_THRESHOLD = 16  # Threshold for squared Mahalanobis distance (lower = more sensitive)
+MOG2_DETECT_SHADOWS = True  # Detect shadows (they appear as grey pixels, value 127)
+
+# Shadow Removal
+SHADOW_THRESHOLD = 200  # Threshold to remove shadows (keep only 255, remove 127 and below)
+                        # Shadows in OpenCV MOG2 are value 127, foreground is 255
+
+# Morphological Noise Removal (Opening = Erosion then Dilation)
+MORPH_KERNEL_SIZE = 3  # Kernel size for morphological operations (3x3 or 5x5)
+                       # Smaller = preserve small details, Larger = remove more noise
+MORPH_KERNEL_SHAPE = 'ellipse'  # 'ellipse' for circular, 'rect' for rectangular
+
+# Stage B Intermediate Videos (for debugging)
+SAVE_FOREGROUND_MASK_VIDEO = True  # Raw MOG2 output (with shadows as grey)
+SAVE_SHADOW_REMOVED_VIDEO = True   # After shadow thresholding
+SAVE_DENOISED_VIDEO = True         # After morphological opening (final clean mask)
+
+# ============================================
 # DEBUG & LOGGING
 # ============================================
 
