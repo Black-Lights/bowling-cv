@@ -16,7 +16,7 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Tracking** - Planned  
+**Phase 2: Ball Detection** - 🔄 **IN PROGRESS** (Video Masking Complete)  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
 **Phase 4: Spin/Rotation Analysis** - Planned  
 **Phase 5: Pin Detection** - Planned
@@ -98,19 +98,25 @@ bowling-cv/
 │
 ├── src/                           # Source code
 │   ├── __init__.py
-│   └── lane_detection/            # Lane boundary detection module
+│   ├── lane_detection/            # Lane boundary detection module (Phase 1)
+│   │   ├── __init__.py
+│   │   ├── config.py              # Configuration settings
+│   │   ├── lane_detector.py       # LaneDetector class (main entry)
+│   │   ├── main_legacy.py         # Legacy entry point
+│   │   ├── detection_functions.py # Line detection algorithms
+│   │   ├── detection_utils.py     # Utility functions
+│   │   ├── master_line_computation.py # Master line voting system
+│   │   ├── top_boundary_detection.py  # Top boundary with MSAC
+│   │   ├── mask_lane_area.py      # Lane masking utilities (shared)
+│   │   ├── preprocess_frames.py   # HSV filtering + gap filling
+│   │   ├── intermediate_visualization.py # Debug visualizations
+│   │   └── tracking_analysis.py   # Tracking stability analysis
+│   │
+│   └── ball_detection/            # Ball detection module (Phase 2)
 │       ├── __init__.py
-│       ├── config.py              # Configuration settings
-│       ├── main.py                # Main entry point (bottom/left/right)
-│       ├── test_top_detection.py  # Top boundary detection script
-│       ├── detection_functions.py # Line detection algorithms
-│       ├── detection_utils.py     # Utility functions
-│       ├── master_line_computation.py # Master line voting system
-│       ├── top_boundary_detection.py  # Top boundary with MSAC
-│       ├── mask_lane_area.py      # Lane masking utilities
-│       ├── preprocess_frames.py   # HSV filtering + gap filling
-│       ├── intermediate_visualization.py # Debug visualizations
-│       └── tracking_analysis.py   # Tracking stability analysis
+│       ├── config.py              # Ball detection configuration
+│       ├── main.py                # Ball detection entry point
+│       └── mask_video.py          # Video masking for ball focus
 │
 ├── output/                        # Generated outputs
 │   └── <video_name>/
@@ -149,11 +155,22 @@ bowling-cv/
   - ✅ Robust MSAC (M-estimator SAmple Consensus) fitting
   - ✅ Complete lane box (all 4 boundaries)
 
-### Planned (Phase 2+)
-- **Ball Detection and Tracking (Phase 2)**
-  - Ball detection using color/motion
+### 🔄 In Progress (Phase 2 - Ball Detection)
+- **Video Masking** ✅ COMPLETE
+  - Reuses Phase 1 lane boundaries
+  - 4-side masking (top, bottom, left, right)
+  - Two modes: video file or frame generator
+  - Memory-efficient frame processing
+- **Ball Detection** (Next)
+  - Color-based detection
+  - Motion-based detection
+  - Hough circle detection
+- **Ball Tracking** (Upcoming)
   - Frame-to-frame tracking
-  - Trajectory smoothing
+  - Trajectory extraction
+  - Smoothing algorithms
+
+### Planned (Phase 3+)
 - **3D Trajectory Reconstruction**
 - **Spin/Rotation Analysis and Axis Detection**
 - **Pin Detection and Topple Counting**
@@ -176,16 +193,42 @@ bowling-cv/
 ---
 
 ## Usage Guide
+Phase 2: Ball Detection (Video Masking)
 
-### Configuration
+```bash
+# Run ball detection (currently: video masking step)
+python -m src.ball_detection.main --video cropped_test3.mp4
+```
 
-Edit [`src/lane_detection/config.py`](src/lane_detection/config.py) to customize:
+**Output:** Masked video focusing only on lane area at `output/<video_name>/ball_detection/intermediate/`
 
-- **Video files to process**: Update `VIDEO_FILES` list
-- **Collection parameters**: `NUM_COLLECTION_FRAMES`, `BIN_WIDTH`, `VOTE_THRESHOLD`
-- **Visualization options**: `VISUALIZATION_MODE`, `SAVE_BIN_ANALYSIS`
-- **Angle calculations**: `USE_ABSOLUTE_ANGLES`, `ANGLE_TOLERANCE`
-- **Debug options**: `DEBUG_MODE`, `SAVE_DEBUG_FRAMES`
+### Using as a Module
+
+**Phase 1: Lane Detection**
+```python
+from src.lane_detection import LaneDetector, config
+
+# Create detector instance
+detector = LaneDetector('path/to/video.mp4', config)
+
+# Run complete detection pipeline
+boundaries, intersections = detector.detect_all()
+```
+
+**Phase 2: Ball Detection (Frame Generator)**
+```python
+from src.ball_detection.mask_video import create_masked_lane_video
+from src.ball_detection import config
+
+# Get masked frames generator (no video file created - memory efficient!)
+frames_gen = create_masked_lane_video('video.mp4', config, save_video=False)
+
+# Process each masked frame directly
+for frame_idx, masked_frame, metadata in frames_gen:
+    # Detect ball in masked_frame
+    ball_position = detect_ball(masked_frame)
+    # Process trajectory
+    trajectory.append(ball_positionRAMES`
 
 ### Running as a Module
 

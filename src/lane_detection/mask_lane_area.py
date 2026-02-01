@@ -11,7 +11,7 @@ import subprocess
 import shutil
 
 
-def create_lane_mask(frame_shape, master_left, master_right, median_foul_params):
+def create_lane_mask(frame_shape, master_left, master_right, median_foul_params, top_boundary=None):
     """
     Create a binary mask for the bowling lane area.
     
@@ -20,11 +20,13 @@ def create_lane_mask(frame_shape, master_left, master_right, median_foul_params)
     frame_shape : tuple
         (height, width) of the frame
     master_left : dict
-        Left boundary parameters with x_intersect and slope
+        Left boundary parameters with x_intersect, x_top, x_bottom, and slope
     master_right : dict
-        Right boundary parameters with x_intersect and slope
+        Right boundary parameters with x_intersect, x_top, x_bottom, and slope
     median_foul_params : dict
         Foul line parameters with center_y and slope
+    top_boundary : dict, optional
+        Top boundary parameters with y_position. If None, masks from frame top (y=0)
         
     Returns:
     --------
@@ -36,38 +38,46 @@ def create_lane_mask(frame_shape, master_left, master_right, median_foul_params)
     # Create blank mask (all black)
     mask = np.zeros((height, width), dtype=np.uint8)
     
-    # Get boundary positions
-    left_x = master_left['x_intersect']
-    right_x = master_right['x_intersect']
+    # Get bottom boundary position
     foul_y = median_foul_params['center_y']
     
-    # For sloped boundaries, we need to account for the angle
-    left_slope = master_left.get('slope', 0)
-    right_slope = master_right.get('slope', 0)
+    # Determine top boundary position
+    if top_boundary is not None:
+        # Use detected top boundary (4-side masking for Phase 2)
+        top_y = int(top_boundary['y_position'])
+        # Calculate x positions where master lines intersect the top boundary
+        # Using line equation: x = x_intersect + (y - y_intersect) / slope
+        left_x_intersect = master_left['x_intersect']
+        right_x_intersect = master_right['x_intersect']
+        left_slope = master_left.get('slope', 0)
+        right_slope = master_right.get('slope', 0)
+        
+        # Calculate x at top_y using the line equation from foul line
+        left_x_top = int(left_x_intersect + (top_y - foul_y) / left_slope) if left_slope != 0 else left_x_intersect
+        right_x_top = int(right_x_intersect + (top_y - foul_y) / right_slope) if right_slope != 0 else right_x_intersect
+    else:
+        # Use frame top (3-side masking for Phase 1)
+        top_y = 0
+        # Calculate x positions at frame top using slope
+        left_x_intersect = master_left['x_intersect']
+        right_x_intersect = master_right['x_intersect']
+        left_slope = master_left.get('slope', 0)
+        right_slope = master_right.get('slope', 0)
+        
+        left_x_top = int(left_x_intersect + (0 - foul_y) / left_slope) if left_slope != 0 else left_x_intersect
+        right_x_top = int(right_x_intersect + (0 - foul_y) / right_slope) if right_slope != 0 else right_x_intersect
     
-    # Create polygon points for the lane area
-    # We'll draw a polygon from top-left to top-right to bottom-right to bottom-left
-    
-    # Calculate x positions at top (y=0) and foul line (y=foul_y)
-    # Using line equation: x = x_intersect + (y - y_intersect) / slope
-    # Assuming x_intersect is at foul line
-    
-    # Left boundary at top (y=0)
-    left_x_top = int(left_x + (0 - foul_y) / left_slope) if left_slope != 0 else left_x
-    # Left boundary at foul line
-    left_x_foul = left_x
-    
-    # Right boundary at top (y=0)  
-    right_x_top = int(right_x + (0 - foul_y) / right_slope) if right_slope != 0 else right_x
-    # Right boundary at foul line
-    right_x_foul = right_x
+    # Get bottom boundary positions at foul line
+    # Use x_intersect since that's the x position at the foul line (y=center_y)
+    left_x_foul = master_left['x_intersect']
+    right_x_foul = master_right['x_intersect']
     
     # Create polygon points (clockwise from top-left)
     polygon_points = np.array([
-        [left_x_top, 0],           # Top-left
-        [right_x_top, 0],          # Top-right
-        [right_x_foul, foul_y],    # Bottom-right (at foul line)
-        [left_x_foul, foul_y]      # Bottom-left (at foul line)
+        [left_x_top, top_y],           # Top-left
+        [right_x_top, top_y],          # Top-right
+        [right_x_foul, foul_y],        # Bottom-right (at foul line)
+        [left_x_foul, foul_y]          # Bottom-left (at foul line)
     ], dtype=np.int32)
     
     # Fill the polygon with white (255 = keep this area)
@@ -76,30 +86,116 @@ def create_lane_mask(frame_shape, master_left, master_right, median_foul_params)
     return mask
 
 
-def apply_mask_to_video(video_path, output_path, master_left, master_right, 
-                       median_foul_params, mask_color=(0, 0, 0)):
+def get_masked_frames_generator(video_path, master_left, master_right, 
+                               median_foul_params, top_boundary=None, mask_color=(0, 0, 0)):
     """
-    Apply lane mask to video, blacking out areas outside the bowling lane.
+    Generator that yields masked frames without creating a video file.
+    Memory-efficient for processing frames directly without saving.
     
     Parameters:
     -----------
     video_path : str
         Path to input video
-    output_path : str
-        Path to save masked video
     master_left : dict
         Left boundary parameters
     master_right : dict
         Right boundary parameters
     median_foul_params : dict
         Foul line parameters
+    top_boundary : dict, optional
+        Top boundary parameters. If None, masks from frame top (3-side masking)
     mask_color : tuple
         Color for masked areas (default: black)
         
+    Yields:
+    -------
+    tuple : (frame_index, masked_frame, metadata)
+        frame_index: int - Frame number (0-indexed)
+        masked_frame: numpy.ndarray - Masked frame
+        metadata: dict - Video info (fps, width, height, total_frames)
+    """
+    cap = cv2.VideoCapture(video_path)
+    
+    if not cap.isOpened():
+        raise FileNotFoundError(f"Could not open video: {video_path}")
+    
+    # Get video properties
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    metadata = {
+        'fps': fps,
+        'width': width,
+        'height': height,
+        'total_frames': total_frames
+    }
+    
+    # Read first frame to create mask
+    ret, first_frame = cap.read()
+    if not ret:
+        cap.release()
+        raise ValueError("Could not read first frame")
+    
+    # Create the mask once
+    mask = create_lane_mask(first_frame.shape, master_left, master_right, median_foul_params, top_boundary)
+    
+    # Reset to beginning
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+    
+    # Yield masked frames
+    frame_index = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Apply mask
+        masked_frame = frame.copy()
+        masked_frame[mask == 0] = mask_color
+        
+        yield (frame_index, masked_frame, metadata)
+        frame_index += 1
+    
+    cap.release()
+
+
+def apply_mask_to_video(video_path, output_path, master_left, master_right, 
+                       median_foul_params, top_boundary=None, mask_color=(0, 0, 0),
+                       save_video=True):
+    """
+    Apply lane mask to video, optionally saving to file or just returning frames.
+    
+    Parameters:
+    -----------
+    video_path : str
+        Path to input video
+    output_path : str
+        Path to save masked video (used only if save_video=True)
+    master_left : dict
+        Left boundary parameters
+    master_right : dict
+        Right boundary parameters
+    median_foul_params : dict
+        Foul line parameters
+    top_boundary : dict, optional
+        Top boundary parameters. If None, masks from frame top (3-side masking)
+    mask_color : tuple
+        Color for masked areas (default: black)
+    save_video : bool
+        If True, saves video file. If False, returns generator for frames.
+        
     Returns:
     --------
-    dict : Information about the masked video
+    dict or generator:
+        If save_video=True: dict with video information
+        If save_video=False: generator yielding (frame_index, masked_frame, metadata)
     """
+    # If not saving video, return generator
+    if not save_video:
+        return get_masked_frames_generator(video_path, master_left, master_right, 
+                                          median_foul_params, top_boundary, mask_color)
     cap = cv2.VideoCapture(video_path)
     
     if not cap.isOpened():
@@ -123,7 +219,7 @@ def apply_mask_to_video(video_path, output_path, master_left, master_right,
     
     # Create the mask
     print("\nCreating lane mask...")
-    mask = create_lane_mask(first_frame.shape, master_left, master_right, median_foul_params)
+    mask = create_lane_mask(first_frame.shape, master_left, master_right, median_foul_params, top_boundary)
     
     # Reset video to beginning
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
