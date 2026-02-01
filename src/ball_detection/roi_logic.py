@@ -189,9 +189,9 @@ def find_ball_contours(mask, config):
     return candidates
 
 
-def global_search(mask, config, foul_line_y, prev_positions=None):
+def global_search(mask, config, foul_line_y, prev_positions=None, max_y_boundary=None):
     """
-    Global Search Mode: Find ball in entire masked lane
+    Global Search Mode: Find ball in entire masked lane (or restricted region)
     
     Prioritizes:
     1. Objects near foul line (bottom boundary)
@@ -202,6 +202,8 @@ def global_search(mask, config, foul_line_y, prev_positions=None):
         config: Configuration module
         foul_line_y: Y-coordinate of foul line
         prev_positions: Previous ball positions (for velocity calculation)
+        max_y_boundary: Maximum Y value for search (None = full lane, int = restrict to y < max_y_boundary)
+                       Used to prevent re-detecting ball behind where it was lost
         
     Returns:
         dict or None: {
@@ -215,6 +217,13 @@ def global_search(mask, config, foul_line_y, prev_positions=None):
     
     if not candidates:
         return None
+    
+    # Filter candidates by Y-position boundary if specified (Problem 2 solution)
+    if max_y_boundary is not None:
+        candidates = [c for c in candidates if c['center'][1] < max_y_boundary]
+        
+        if not candidates:
+            return None
     
     # Score candidates
     scored = []
@@ -340,6 +349,13 @@ class BallTracker:
         self.lost_frames = 0
         self.trajectory = []  # List of (x, y) positions
         
+        # Confirmation tracking (Problem 2 solution)
+        self.confirmation_counter = 0  # Consecutive successful tracking frames
+        self.is_confirmed = False  # True if CONFIRMATION_THRESHOLD reached
+        self.total_distance_traveled = 0.0  # Cumulative pixel distance
+        self.last_confirmed_y = None  # Y position where confirmed tracking was lost
+        self.last_position = None  # Previous (x, y) for distance calculation
+        
         # For global search velocity calculation
         self.recent_detections = deque(maxlen=5)
     
@@ -372,11 +388,15 @@ class BallTracker:
             # GLOBAL SEARCH MODE
             result['mode'] = 'global'
             
+            # Determine search boundary (Problem 2 solution)
+            max_y = self.last_confirmed_y if self.last_confirmed_y is not None else None
+            
             detection = global_search(
                 denoised_mask,
                 self.config,
                 self.foul_line_y,
-                list(self.recent_detections)
+                list(self.recent_detections),
+                max_y_boundary=max_y
             )
             
             if detection:
@@ -392,6 +412,7 @@ class BallTracker:
                 # Activate tracking
                 self.tracking_active = True
                 self.lost_frames = 0
+                self.last_position = (cx, cy)  # Initialize for distance calculation
                 self.trajectory.append((cx, cy))
                 self.recent_detections.append((cx, cy))
                 
@@ -433,19 +454,60 @@ class BallTracker:
                     self.trajectory.append((cx, cy))
                     self.recent_detections.append((cx, cy))
                     self.lost_frames = 0
+                    
+                    # Update confirmation tracking
+                    self.confirmation_counter += 1
+                    
+                    # Calculate distance traveled (for spatial confirmation)
+                    if self.last_position is not None:
+                        prev_x, prev_y = self.last_position
+                        distance = np.sqrt((cx - prev_x)**2 + (cy - prev_y)**2)
+                        self.total_distance_traveled += distance
+                    
+                    self.last_position = (cx, cy)
+                    
+                    # Check if confirmed
+                    if self.confirmation_counter >= self.config.CONFIRMATION_THRESHOLD:
+                        if not self.is_confirmed:
+                            self.is_confirmed = True
+                            if self.config.VERBOSE:
+                                print(f"  Frame {frame_idx}: Ball CONFIRMED (tracked {self.confirmation_counter} frames, traveled {self.total_distance_traveled:.1f}px)")
                 else:
                     # Ball lost
                     self.lost_frames += 1
                     
                     if self.lost_frames >= self.config.MAX_LOST_FRAMES:
+                        # Determine search strategy based on confirmation status
+                        use_restricted_search = (
+                            self.is_confirmed and 
+                            self.total_distance_traveled >= self.config.SPATIAL_CONFIRMATION_DISTANCE and
+                            self.last_position is not None
+                        )
+                        
+                        if use_restricted_search:
+                            # CONFIRMED BALL: Restrict search to prevent re-detecting behind last position
+                            self.last_confirmed_y = self.last_position[1] - self.config.SEARCH_BUFFER
+                            if self.config.VERBOSE:
+                                print(f"  Frame {frame_idx}: Confirmed ball lost. Restricting search to y < {self.last_confirmed_y:.0f}")
+                        else:
+                            # UNCONFIRMED OBJECT: Full reset (might have been hand)
+                            if self.config.VERBOSE:
+                                reason = "unconfirmed tracking" if not self.is_confirmed else f"short distance ({self.total_distance_traveled:.1f}px)"
+                                print(f"  Frame {frame_idx}: Ball lost ({reason}). Full lane search activated")
+                        
                         # Revert to global search
                         self.tracking_active = False
                         self.kalman = BallKalmanFilter(
                             self.config.KALMAN_PROCESS_NOISE,
                             self.config.KALMAN_MEASUREMENT_NOISE
                         )
-                        if self.config.VERBOSE:
-                            print(f"  Frame {frame_idx}: Ball lost for {self.lost_frames} frames. Reverting to global search")
+                        
+                        # Reset confirmation tracking if not confirmed
+                        if not use_restricted_search:
+                            self.confirmation_counter = 0
+                            self.is_confirmed = False
+                            self.total_distance_traveled = 0.0
+                            self.last_confirmed_y = None
         
         return result
 

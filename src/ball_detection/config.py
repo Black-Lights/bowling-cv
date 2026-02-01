@@ -112,6 +112,18 @@ KALMAN_MEASUREMENT_NOISE = 10.0  # Measurement noise covariance (detection uncer
 MAX_LOST_FRAMES = 1  # Maximum consecutive frames without detection before reverting to global search
                       # Prevents getting stuck in local mode when ball is lost
 
+# Confirmation Logic (Problem 2 Solution - Prevents false search space pruning)
+CONFIRMATION_THRESHOLD = 20  # Consecutive frames needed to confirm it's the ball (not hand)
+                              # Will integrate with Stage D filters (circularity, aspect ratio)
+                              # Currently just counts frames, Stage D will add geometric validation
+
+SPATIAL_CONFIRMATION_DISTANCE = 240  # Minimum travel distance (pixels) to confirm it's the ball
+                                      # Approximately 12 feet from foul line in perspective view
+                                      # Prevents early search restriction if only tracking hand
+
+SEARCH_BUFFER = 50  # Buffer (pixels) above last known Y position for restricted search
+                    # Adds safety margin to account for prediction uncertainty
+
 # Stage C Intermediate Videos (for debugging)
 SAVE_ROI_GLOBAL_SEARCH_VIDEO = True      # Global search mode visualization
 SAVE_ROI_LOCAL_TRACKING_VIDEO = True     # Local tracking mode with ROI boxes
