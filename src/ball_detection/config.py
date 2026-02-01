@@ -85,6 +85,42 @@ SAVE_SHADOW_REMOVED_VIDEO = True   # After shadow thresholding
 SAVE_DENOISED_VIDEO = True         # After morphological opening (final clean mask)
 
 # ============================================
+# STAGE C: ROI LOGIC (SEARCH STRATEGY)
+# ============================================
+
+# ROI Dynamic Scaling (Perspective-Aware)
+B_MIN = 30  # Minimum ROI buffer size (pixels) - prevents ROI from becoming too small near pins
+K_SCALE = 0.15  # Perspective scaling factor: B_t = max(B_min, k * y_ball)
+                # Larger = bigger search box, Smaller = tighter tracking
+
+# Ball Size Constraints (for contour filtering)
+MIN_BALL_RADIUS = 5   # Minimum ball radius (pixels) - ball at 60ft (near pins)
+MAX_BALL_RADIUS = 50  # Maximum ball radius (pixels) - ball at foul line
+
+# Velocity Filtering (Global Search Mode)
+MIN_VELOCITY_Y = -2  # Minimum Y velocity (negative = toward pins, away from camera)
+                     # Filters out bowler's body and lateral movements
+FOUL_LINE_PRIORITY_ZONE = 100  # Pixels from bottom boundary to prioritize detection
+                               # Focus on area near foul line for initial detection
+
+# Kalman Filter Parameters
+KALMAN_PROCESS_NOISE = 1.0      # Process noise covariance (motion model uncertainty)
+KALMAN_MEASUREMENT_NOISE = 10.0  # Measurement noise covariance (detection uncertainty)
+                                 # Lower = trust measurements more, Higher = trust prediction more
+
+# State Management
+MAX_LOST_FRAMES = 1  # Maximum consecutive frames without detection before reverting to global search
+                      # Prevents getting stuck in local mode when ball is lost
+
+# Stage C Intermediate Videos (for debugging)
+SAVE_ROI_GLOBAL_SEARCH_VIDEO = True      # Global search mode visualization
+SAVE_ROI_LOCAL_TRACKING_VIDEO = True     # Local tracking mode with ROI boxes
+SAVE_KALMAN_PREDICTION_VIDEO = True      # Kalman predictions vs actual detections
+SAVE_ROI_MODE_COMPARISON_VIDEO = True    # Side-by-side global vs local
+SAVE_ROI_SCALING_DEMO_VIDEO = True       # Perspective scaling demonstration
+SAVE_FULL_ROI_PIPELINE_VIDEO = True      # Complete 2x3 grid pipeline view
+
+# ============================================
 # DEBUG & LOGGING
 # ============================================
 

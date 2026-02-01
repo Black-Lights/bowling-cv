@@ -5,8 +5,9 @@ Currently implements:
 - Step 1: Video masking to focus on lane area
 - Step 2: Perspective transformation to overhead view
 - Step 3: Motion detection (background subtraction)
+- Step 4: ROI logic (dual-mode search strategy with Kalman filter)
 
-Version: 1.1.0
+Version: 1.2.0
 Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
 Last Updated: February 1, 2026
 
@@ -28,6 +29,7 @@ from ball_detection import config
 from ball_detection.mask_video import create_masked_lane_video
 from ball_detection.transform_video import create_transformed_video
 from ball_detection.motion_detection import save_motion_detection_videos
+from ball_detection.roi_visualization import generate_roi_videos
 
 
 def main():
@@ -38,11 +40,11 @@ def main():
     - Step 1: Create masked video (lane area only)
     - Step 2: Create perspective-corrected video (overhead view)
     - Step 3: Motion detection with background subtraction (Stage B)
+    - Step 4: ROI logic with Kalman filter tracking (Stage C)
     
     Future steps:
-    - Step 4: Ball detection (color/motion/hybrid)
-    - Step 5: Ball tracking
-    - Step 6: Trajectory analysis
+    - Step 5: Trajectory analysis and export
+    - Step 6: Spin/rotation analysis
     """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Bowling Ball Detection Pipeline - Phase 2')
@@ -50,6 +52,7 @@ def main():
     parser.add_argument('--skip-masking', action='store_true', help='Skip Step 1 (masked video)')
     parser.add_argument('--skip-transform', action='store_true', help='Skip Step 2 (transformed video)')
     parser.add_argument('--skip-motion', action='store_true', help='Skip Step 3 (motion detection)')
+    parser.add_argument('--skip-roi', action='store_true', help='Skip Step 4 (ROI logic)')
     args = parser.parse_args()
     
     # Determine which videos to process
@@ -63,6 +66,7 @@ def main():
     print(f"# Step 1: Lane Masking")
     print(f"# Step 2: Perspective Transformation")
     print(f"# Step 3: Motion Detection (Background Subtraction)")
+    print(f"# Step 4: ROI Logic (Kalman Filter Tracking)")
     print(f"# Processing {len(videos)} video(s)")
     print(f"{'#'*80}\n")
     
@@ -100,6 +104,22 @@ def main():
                         print(f"    - {name}: {Path(path).name}")
                 else:
                     print(f"✗ Failed motion detection: {video_file}\n")
+            
+            # Step 4: ROI Logic with Kalman filter tracking (Stage C)
+            if not args.skip_roi:
+                print(f"\n{'='*60}")
+                print(f"Step 4: ROI Logic & Tracking - {video_file}")
+                print(f"{'='*60}")
+                
+                result = generate_roi_videos(video_file, config, str(output_base_dir))
+                
+                if result:
+                    print(f"\n✓ ROI tracking complete for {video_file}")
+                    print(f"  Generated {len(result)} videos:")
+                    for name, path in result.items():
+                        print(f"    - {name}: {Path(path).name}")
+                else:
+                    print(f"✗ Failed ROI tracking: {video_file}\n")
                 
         except FileNotFoundError as e:
             print(f"\n✗ Error processing {video_file}:")
