@@ -1,7 +1,9 @@
 """
 Main entry point for bowling ball detection - Phase 2.
 
-Currently implements Step 1: Video masking to focus on lane area.
+Currently implements:
+- Step 1: Video masking to focus on lane area
+- Step 2: Perspective transformation to overhead view
 
 Version: 1.0.0
 Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
@@ -23,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from ball_detection import config
 from ball_detection.mask_video import create_masked_lane_video
+from ball_detection.transform_video import create_transformed_video
 
 
 def main():
@@ -31,11 +34,12 @@ def main():
     
     Currently implements:
     - Step 1: Create masked video (lane area only)
+    - Step 2: Create perspective-corrected video (overhead view)
     
     Future steps:
-    - Step 2: Ball detection (color/motion/hybrid)
-    - Step 3: Ball tracking
-    - Step 4: Trajectory analysis
+    - Step 3: Ball detection (color/motion/hybrid)
+    - Step 4: Ball tracking
+    - Step 5: Trajectory analysis
     """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Bowling Ball Detection Pipeline - Phase 2')
@@ -51,17 +55,24 @@ def main():
     print(f"\n{'#'*80}")
     print(f"# BOWLING BALL DETECTION - PHASE 2")
     print(f"# Step 1: Lane Masking")
+    print(f"# Step 2: Perspective Transformation")
     print(f"# Processing {len(videos)} video(s)")
     print(f"{'#'*80}\n")
     
     # Process each video
     for video_file in videos:
         try:
-            result = create_masked_lane_video(video_file, config)
+            # Step 1: Create masked video (if enabled)
+            if config.SAVE_MASKED_VIDEO:
+                result = create_masked_lane_video(video_file, config, save_video=True)
+                if not result:
+                    print(f"✗ Failed to create masked video: {video_file}\n")
             
-            if not result:
-                print(f"✗ Failed to process: {video_file}\n")
-                continue
+            # Step 2: Create perspective-corrected video (if enabled)
+            if config.SAVE_TRANSFORMED_VIDEO:
+                result = create_transformed_video(video_file, config)
+                if not result:
+                    print(f"✗ Failed to create transformed video: {video_file}\n")
                 
         except FileNotFoundError as e:
             print(f"\n✗ Error processing {video_file}:")
@@ -74,7 +85,7 @@ def main():
             continue
     
     print(f"\n{'#'*80}")
-    print(f"# LANE MASKING COMPLETE")
+    print(f"# BALL DETECTION PIPELINE COMPLETE")
     print(f"{'#'*80}\n")
 
 

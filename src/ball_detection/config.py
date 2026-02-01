@@ -36,6 +36,18 @@ VIDEO_FILES = [
 # Save masked lane video (for debugging/visualization)
 SAVE_MASKED_VIDEO = True  # True to see the masked lane video
 
+# Save perspective-corrected video (overhead view)
+SAVE_TRANSFORMED_VIDEO = True  # True to create transformed video
+
+# ============================================
+# PERSPECTIVE TRANSFORMATION
+# ============================================
+
+# Pixels per inch for transformed video
+# Higher = better resolution but larger file size
+# 10 = good balance (~415x7200 pixels)
+TRANSFORM_SCALE = 10
+
 # ============================================
 # DEBUG & LOGGING
 # ============================================
