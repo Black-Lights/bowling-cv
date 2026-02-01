@@ -186,6 +186,13 @@ bowling-cv/
   - Local tracking: searches within predicted ROI box
   - 10-frame timeout before reverting to global search
   - 6 intermediate videos: global search, local tracking, Kalman predictions, mode comparison, scaling demo, full pipeline
+  - **Confirmation Logic (Problem 2 Solution)**:
+    - Dual confirmation: 20 consecutive frames + 240px travel distance (~12 feet)
+    - Unconfirmed object lost → Full lane search (prevents false restriction if tracking hand)
+    - Confirmed ball lost → Restricted search (y < last_position - 50px buffer)
+    - Physics-informed: ball cannot move back toward camera
+    - Prevents re-detecting ball behind where it was lost
+    - Successfully tested: Frame 109 confirmation, Frame 139 restricted search
 - **Ball Filtering (Blob Analysis)** (Next - Stage D)
   - Circularity filter (C > 0.65)
   - Aspect ratio validation (< 2.0)
