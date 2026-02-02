@@ -16,7 +16,7 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E Integrated)  
+**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F Integrated)  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
 **Phase 4: Spin/Rotation Analysis** - Planned  
 **Phase 5: Pin Detection** - Planned
@@ -213,18 +213,26 @@ bowling-cv/
     - Debug overlay (complete info panel)
   
   - ✅ **Stage F: Stop Condition & Trajectory Export**
-    - Percentage-based stop threshold (0.5% below top boundary)
+    - **Configurable stop threshold** (2% above top boundary - allows tracking to pins)
+      - NEW: Stops when Y ≤ top_boundary - 2% of frame_height
+      - Example: top=130, height=954 → stops at Y≤111 (closer to pins)
+    - **3-Boundary Masking Mode** for tracking (L+R+B only)
+      - Top boundary NOT masked during tracking (allows complete trajectory)
+      - Stage A (homography) still uses 4 boundaries for correct transformation
+    - **5 Kalman Predictions** after stopping (NEW)
+      - Replaced single linear interpolation with 5 sequential Kalman predictions
+      - Simulates ball motion for 5 future frames
+      - More accurate trajectory extrapolation using filter state propagation
     - Early tracking termination when ball reaches pin area
-    - Saves ~35% processing time (tested: 226/346 frames)
-    - Linear interpolation beyond last detection using Kalman velocity
+    - Saves ~35-45% processing time (tested: 141/254 frames on cropped_test3)
     - Trajectory data export for post-processing:
       - Original (perspective) coordinates
       - Transformed (overhead) coordinates via homography
-      - Interpolated endpoints in both coordinate systems
+      - 5 interpolated endpoints in both coordinate systems (NEW)
       - JSON format with complete metadata
     - Enhanced visualizations:
       - Stop threshold line (magenta)
-      - Interpolated trajectory (dashed orange)
+      - Interpolated trajectory with 5 predictions (dashed orange)
       - Trajectory plots on original and overhead views
 
 ### 🔄 In Progress (Phase 2)

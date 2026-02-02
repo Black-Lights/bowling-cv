@@ -121,7 +121,14 @@ def create_transformed_video(video_path: str, config):
     from ball_detection.mask_video import create_masked_lane_video
     
     # Get frame generator (save_video=False for memory efficiency)
-    masked_frames_gen = create_masked_lane_video(video_path, config, save_video=False)
+    # IMPORTANT: Force 4-boundary masking for homography (Stage A)
+    # This ensures correct perspective transformation even if config.MASK_TOP_BOUNDARY=False
+    masked_frames_gen = create_masked_lane_video(
+        video_path, 
+        config, 
+        save_video=False,
+        force_mask_top=True  # Stage A always needs all 4 boundaries for homography
+    )
     
     # Get scale factor from config (same for both dimensions to preserve aspect ratio)
     scale = getattr(config, 'TRANSFORM_SCALE', 10)

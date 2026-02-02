@@ -19,18 +19,21 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from lane_detection.mask_lane_area import apply_mask_to_video
 
 
-def create_masked_lane_video(video_path: str, config, save_video=None):
+def create_masked_lane_video(video_path: str, config, save_video=None, force_mask_top=None):
     """
     Create a masked video or return masked frames generator.
     
     Uses boundary data from Phase 1 to mask out everything outside
-    the lane boundaries (left, right, top, bottom).
+    the lane boundaries. Supports both 3-boundary (L+R+B) and 4-boundary (L+R+B+T) masking.
     
     Args:
         video_path (str): Path to input video
         config: Configuration module with settings
         save_video (bool, optional): If True, saves video. If False, returns frame generator.
                                      If None, uses config.SAVE_MASKED_VIDEO
+        force_mask_top (bool, optional): If specified, overrides config.MASK_TOP_BOUNDARY
+                                         True = mask all 4 sides, False = mask only L+R+B
+                                         Used by Stage A (homography) to force 4-boundary masking
         
     Returns:
         dict or generator:
@@ -72,6 +75,16 @@ def create_masked_lane_video(video_path: str, config, save_video=None):
     with open(boundary_file, 'r') as f:
         boundary_data = json.load(f)
     
+    # Determine whether to mask top boundary
+    # force_mask_top overrides config (used by Stage A for homography)
+    if force_mask_top is not None:
+        mask_top = force_mask_top
+    else:
+        mask_top = getattr(config, 'MASK_TOP_BOUNDARY', True)
+    
+    # Prepare top boundary parameter
+    top_boundary_param = boundary_data['top_boundary'] if mask_top else None
+    
     if config.VERBOSE:
         print(f"\n{'='*80}")
         if save_video:
@@ -85,13 +98,16 @@ def create_masked_lane_video(video_path: str, config, save_video=None):
         print(f"  - Right boundary: x={boundary_data['master_right']['x_intersect']}")
         print(f"  - Top boundary: y={boundary_data['top_boundary']['y_position']:.1f}")
         print(f"  - Bottom boundary (foul): y={boundary_data['median_foul_params']['center_y']}")
+        print(f"\nMasking mode: {'4-boundary (L+R+B+T)' if mask_top else '3-boundary (L+R+B only)'}")
+        if not mask_top:
+            print(f"  → Top boundary NOT masked (allows tracking to pins)")
     
     # Determine output path
     output_path = os.path.join(intermediate_dir, f'{video_name}_lane_masked.mp4') if save_video else None
     
     if config.VERBOSE:
         if save_video:
-            print(f"\nMasking video to lane area only (all 4 boundaries)...")
+            print(f"\nMasking video to lane area...")
         else:
             print(f"\nCreating frame generator (no video file will be saved)...")
     
@@ -102,7 +118,7 @@ def create_masked_lane_video(video_path: str, config, save_video=None):
         boundary_data['master_left'],
         boundary_data['master_right'],
         boundary_data['median_foul_params'],
-        top_boundary=boundary_data['top_boundary'],  # Include top boundary for 4-side masking
+        top_boundary=top_boundary_param,  # None for 3-boundary, dict for 4-boundary
         save_video=save_video
     )
     

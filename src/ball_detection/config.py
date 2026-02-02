@@ -38,6 +38,11 @@ VIDEO_FILES = [
 # Save masked lane video (for debugging/visualization)
 SAVE_MASKED_VIDEO = True  # True to see the masked lane video
 
+# Masking Configuration
+MASK_TOP_BOUNDARY = False  # False = 3-boundary masking (L+R+B only, allows tracking to pins)
+                           # True = 4-boundary masking (L+R+B+T, stops at top boundary)
+                           # Note: Stage A (homography) always uses 4 boundaries regardless
+
 # Save perspective-corrected video (overhead view)
 SAVE_TRANSFORMED_VIDEO = True  # True to create transformed video
 
@@ -194,13 +199,14 @@ SAVE_FULL_BLOB_PIPELINE_VIDEO = True         # 2x3 grid showing all stages
 
 # Stop tracking when ball reaches pin area
 ENABLE_STOP_CONDITION = True                 # Enable automatic stop when near pins
-STOP_THRESHOLD_PCT = 0.01                    # Stop when Y ≤ (top_boundary + 3% of frame_height)
-                                             # Example: If top=130, height=800, stop at Y≤154
+STOP_THRESHOLD_PCT = -0.02                   # Stop when Y ≤ (top_boundary + STOP_THRESHOLD_PCT * frame_height)
+                                             # Negative = stop ABOVE top boundary (toward frame top)
+                                             # Example: If top=130, height=954, stop at Y≤111 (130 - 19)
 
-# Trajectory Interpolation (optional mathematical extension)
-INTERPOLATE_TO_BOUNDARY = True               # Extend trajectory beyond last detection
-INTERPOLATE_BEYOND_PCT = 0.02                # Extrapolate to (top_boundary - 5% of frame_height)
-                                             # Example: If top=130, height=800, extrapolate to Y=90
+# Trajectory Interpolation using Kalman Filter predictions
+INTERPOLATE_TO_BOUNDARY = True               # Extend trajectory beyond last detection using Kalman
+NUM_KALMAN_PREDICTIONS_AFTER_STOP = 5        # Number of Kalman predictions to collect after stopping
+                                             # These predictions simulate future ball positions
 MARK_INTERPOLATED_POINTS = True              # Visual distinction in plots (dashed line)
 
 # Visualization

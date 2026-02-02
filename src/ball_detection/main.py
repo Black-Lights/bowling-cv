@@ -83,6 +83,7 @@ def main():
             output_base_dir = config.OUTPUT_DIR / Path(video_name)
             
             # Step 1: Create masked video (if enabled and not skipped)
+            # Respects config.MASK_TOP_BOUNDARY setting (3 or 4 boundary masking)
             if not args.skip_masking and config.SAVE_MASKED_VIDEO:
                 result = create_masked_lane_video(video_file, config, save_video=True)
                 if not result:
@@ -142,10 +143,9 @@ def main():
                 import cv2
                 import numpy as np
                 import json
-                from ball_detection.mask_video import create_masked_lane_video
                 from ball_detection.motion_detection import apply_background_subtraction
                 from ball_detection.roi_logic import BallTracker
-                from ball_detection.blob_analysis import BlobAnalyzer
+                # Note: create_masked_lane_video already imported at top of file
                 
                 # Get video path
                 video_path = Path(config.ASSETS_DIR) / video_file
@@ -186,6 +186,8 @@ def main():
                 print("Processing frames with integrated tracking...")
                 
                 # Get masked frames generator
+                # Respects config.MASK_TOP_BOUNDARY (False = 3 boundaries, True = 4 boundaries)
+                # Stage A (homography) always uses 4 boundaries regardless
                 masked_frames_gen = create_masked_lane_video(video_file, config, save_video=False)
                 
                 # Apply motion detection

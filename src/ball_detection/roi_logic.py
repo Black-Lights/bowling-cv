@@ -414,8 +414,8 @@ class BallTracker:
     
     def _interpolate_trajectory(self, last_x, last_y, frame_idx):
         """
-        Interpolate trajectory beyond last detection to/past top boundary
-        Uses linear extrapolation based on last known velocity from Kalman filter
+        Collect N Kalman filter predictions after trajectory completion
+        Simulates future ball positions using Kalman state propagation
         
         Args:
             last_x: X coordinate of last detection
@@ -425,7 +425,7 @@ class BallTracker:
         if not self.kalman.initialized:
             return
         
-        # Get velocity from Kalman filter
+        # Get current velocity from Kalman filter
         state = self.kalman.kf.statePost
         vx = state[2, 0]
         vy = state[3, 0]
@@ -433,31 +433,36 @@ class BallTracker:
         # Check if ball is moving toward pins (negative Y velocity)
         if vy >= 0:
             if self.config.VERBOSE:
-                print(f"  Warning: Ball not moving toward pins (vy={vy:.2f}). Skipping interpolation.")
+                print(f"  Warning: Ball not moving toward pins (vy={vy:.2f}). Skipping Kalman predictions.")
             return
         
-        # Calculate interpolation target: top_boundary - 5% of frame height
-        beyond_offset = int(self.config.INTERPOLATE_BEYOND_PCT * self.frame_height)
-        target_y = self.top_boundary_y - beyond_offset
-        
-        # Calculate time (in frames) to reach target
-        delta_y = target_y - last_y
-        time_steps = delta_y / vy if vy != 0 else 0
-        
-        # Calculate final interpolated position
-        final_x = last_x + (vx * time_steps)
-        final_y = target_y
-        
-        # Store interpolated point
-        self.interpolated_points = [(int(final_x), int(final_y))]
+        # Get number of predictions from config
+        num_predictions = getattr(self.config, 'NUM_KALMAN_PREDICTIONS_AFTER_STOP', 5)
         
         if self.config.VERBOSE:
-            print(f"  Interpolation:")
-            print(f"    Last detection: ({last_x}, {last_y})")
-            print(f"    Velocity: vx={vx:.2f}, vy={vy:.2f} px/frame")
-            print(f"    Target Y: {target_y} (top_boundary - {self.config.INTERPOLATE_BEYOND_PCT*100:.1f}%)")
-            print(f"    Time to target: {time_steps:.1f} frames")
-            print(f"    Interpolated point: ({int(final_x)}, {int(final_y)})")
+            print(f"  Collecting {num_predictions} Kalman predictions after stop:")
+            print(f"    Last detection: ({last_x:.0f}, {last_y:.0f})")
+            print(f"    Initial velocity: vx={vx:.2f}, vy={vy:.2f} px/frame")
+        
+        # Collect N predictions by running Kalman filter forward without measurements
+        predictions = []
+        for i in range(num_predictions):
+            # Predict next frame
+            prediction = self.kalman.predict()
+            
+            # Store prediction
+            pred_x = int(prediction['x'])
+            pred_y = int(prediction['y'])
+            predictions.append((pred_x, pred_y))
+            
+            if self.config.VERBOSE:
+                print(f"    Prediction {i+1}: ({pred_x}, {pred_y})")
+        
+        # Store all predictions
+        self.interpolated_points = predictions
+        
+        if self.config.VERBOSE:
+            print(f"  Stored {len(predictions)} Kalman predictions")
     
     def _filter_all_candidates(self, denoised_mask, frame=None):
         """
