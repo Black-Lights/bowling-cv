@@ -198,7 +198,8 @@ bowling-cv/
     - Kalman filter for position prediction (4-state: x, y, vx, vy)
     - Dual search modes:
       - **Global Search Type 1 (Initial)**: Exclude upper 30%, select near foul line
-      - **Global Search Type 2 (Reactivation)**: Search above last position (toward pins)
+      - **Global Search Type 2 (Reactivation)**: Search above last position (Y < last_y + margin)
+        - ⚠️ Fixed: Now correctly searches toward pins (smaller Y values)
       - **Local Tracking**: ROI around Kalman prediction
     - Perspective-aware dynamic ROI: B = max(30px, 0.15 × y_ball)
     - Confirmation logic: 20 frames + 240px travel distance
@@ -459,10 +460,13 @@ Stage B (Motion) → Stage D (Filter ALL full-frame) → Stage C (Select based o
 
 *Global Search Type 2 (Reactivation):*
 - When: Confirmed ball lost mid-lane
-- Strategy: Search Y > last_known_y - 50px (search ABOVE/toward pins)
+- Strategy: Search Y < last_known_y + 50px (search ABOVE toward pins)
+  - ⚠️ CRITICAL FIX: Changed from `Y > last_y - 50` to `Y < last_y + 50`
+  - Correctly searches toward pins (smaller Y values in image coordinates)
+  - Prevents false detections in bowler's hand area below last position
 - Selection: Closest to last known position
 - Purpose: Prevent re-detecting bowler when ball already at pins
-- Timeout: Reset to initial search after 60 frames without detection
+- Timeout: Reset to initial search after 100 frames without detection
 
 *Local Tracking:*
 - When: Ball actively tracked

@@ -152,16 +152,16 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
             else:  # reactivation
                 # Draw search boundary using actual last_known_y from tracker
                 if result.get('last_known_y') is not None:
-                    min_y_search = result['last_known_y'] - config.REACTIVATION_SEARCH_MARGIN
+                    max_y_search = result['last_known_y'] + config.REACTIVATION_SEARCH_MARGIN
                 else:
                     # Fallback if last_known_y not available
-                    min_y_search = height // 2
+                    max_y_search = height // 2
                 
                 # Clamp to frame bounds
-                min_y_search = max(0, min(height, int(min_y_search)))
+                max_y_search = max(0, min(height, int(max_y_search)))
                 
-                cv2.line(vis, (0, min_y_search), (width, min_y_search), (0, 255, 0), 3)
-                cv2.putText(vis, f"Search Above Y={min_y_search} (toward pins)", (10, min_y_search + 25),
+                cv2.line(vis, (0, max_y_search), (width, max_y_search), (0, 255, 0), 3)
+                cv2.putText(vis, f"Search Above Y={max_y_search} (toward pins)", (10, max(max_y_search - 30, 25)),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
                 if result.get('last_known_y') is not None:
@@ -171,11 +171,11 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
                     cv2.putText(vis, f"Last Known Y={last_y}", (10, last_y - 10),
                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 0), 2)
                 
-                # Shade restricted zone (below search line = toward foul line)
+                # Shade restricted zone (BELOW search line = toward foul line, larger Y values)
                 overlay = vis.copy()
-                cv2.rectangle(overlay, (0, min_y_search), (width, height), (0, 0, 255), -1)
+                cv2.rectangle(overlay, (0, max_y_search), (width, height), (0, 0, 255), -1)
                 cv2.addWeighted(overlay, 0.15, vis, 0.85, 0, vis)
-                cv2.putText(vis, "NO SEARCH (below last position)", (10, min(min_y_search + 50, height - 10)),
+                cv2.putText(vis, "NO SEARCH (below last position)", (10, min(max_y_search + 30, height - 10)),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
         
         else:  # local tracking

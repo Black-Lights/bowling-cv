@@ -577,12 +577,14 @@ class BallTracker:
                 return self._global_search_selection(validated_candidates)
             
             # Search above (lower Y) last position with safety margin
-            min_y_search = self.last_known_y - self.config.REACTIVATION_SEARCH_MARGIN
+            # In image coordinates: smaller Y = higher up toward pins
+            max_y_search = self.last_known_y + self.config.REACTIVATION_SEARCH_MARGIN
             
-            # Filter to candidates in valid zone (above last position - margin)
+            # Filter to candidates in valid zone (above last position + margin)
+            # Keep only candidates with Y < max_y_search (closer to pins/frame top)
             valid_candidates = [
                 c for c in validated_candidates 
-                if c['center'][1] > min_y_search
+                if c['center'][1] < max_y_search
             ]
             
             if len(valid_candidates) == 0:
@@ -770,7 +772,7 @@ class BallTracker:
                     # CONFIRMED BALL: Switch to reactivation mode
                     self.search_type = 'reactivation'
                     if self.config.VERBOSE:
-                        print(f"  Frame {frame_idx}: Confirmed ball lost. Reactivation search (y > {self.last_known_y - self.config.REACTIVATION_SEARCH_MARGIN:.0f})")
+                        print(f"  Frame {frame_idx}: Confirmed ball lost. Reactivation search (y < {self.last_known_y + self.config.REACTIVATION_SEARCH_MARGIN:.0f})")
                 else:
                     # UNCONFIRMED OBJECT: Reset to initial mode
                     self.search_type = 'initial'
