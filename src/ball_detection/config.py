@@ -74,10 +74,15 @@ MOG2_DETECT_SHADOWS = True  # Detect shadows (they appear as grey pixels, value 
 SHADOW_THRESHOLD = 200  # Threshold to remove shadows (keep only 255, remove 127 and below)
                         # Shadows in OpenCV MOG2 are value 127, foreground is 255
 
-# Morphological Noise Removal (Opening = Erosion then Dilation)
+# Morphological Noise Removal
 MORPH_KERNEL_SIZE = 3  # Kernel size for morphological operations (3x3 or 5x5)
                        # Smaller = preserve small details, Larger = remove more noise
 MORPH_KERNEL_SHAPE = 'ellipse'  # 'ellipse' for circular, 'rect' for rectangular
+
+# Shadow Separation (CRITICAL for ball/shadow separation)
+USE_SHADOW_SEPARATION = True  # Apply extra erosion to separate ball from shadow
+SHADOW_SEPARATION_ITERATIONS = 2  # Number of erosion iterations (2-3 recommended)
+                                   # Separates merged ball+shadow blobs
 
 # Stage B Intermediate Videos (for debugging)
 SAVE_FOREGROUND_MASK_VIDEO = True  # Raw MOG2 output (with shadows as grey)
@@ -109,8 +114,9 @@ KALMAN_MEASUREMENT_NOISE = 10.0  # Measurement noise covariance (detection uncer
                                  # Lower = trust measurements more, Higher = trust prediction more
 
 # State Management
-MAX_LOST_FRAMES = 1  # Maximum consecutive frames without detection before reverting to global search
+MAX_LOST_FRAMES = 5  # Maximum consecutive frames without detection before reverting to global search
                       # Prevents getting stuck in local mode when ball is lost
+                      # Low value (2-3) prevents Kalman drift when ball hits pins
 
 # Confirmation Logic (Problem 2 Solution - Prevents false search space pruning)
 CONFIRMATION_THRESHOLD = 20  # Consecutive frames needed to confirm it's the ball (not hand)
@@ -123,6 +129,15 @@ SPATIAL_CONFIRMATION_DISTANCE = 240  # Minimum travel distance (pixels) to confi
 
 SEARCH_BUFFER = 50  # Buffer (pixels) above last known Y position for restricted search
                     # Adds safety margin to account for prediction uncertainty
+
+# Global Search Configuration (Two Types)
+REACTIVATION_SEARCH_MARGIN = 20  # Pixels above last known Y to search when ball lost mid-lane
+                                  # Searches toward pins (lower Y), with safety margin below last position
+REACTIVATION_TIMEOUT = 100  # Frames of failed reactivation search before resetting to full frame
+                            # If ball not found after this many frames in reactivation mode,
+                            # reset to initial search (useful when ball completes path or leaves frame)
+FOUL_LINE_EXCLUSION_FACTOR = 0.6  # Exclude upper 30% of frame in initial global search
+                                   # Prevents tracking bowler's head instead of ball
 
 # Stage C Intermediate Videos (for debugging)
 SAVE_ROI_GLOBAL_SEARCH_VIDEO = True      # Global search mode visualization
@@ -149,12 +164,13 @@ CALIBRATION_FRAMES = 30     # Number of frames to use for auto-calibration
 CALIBRATION_MIN_CIRCULARITY = 0.7  # Minimum circularity to accept blob for calibration
 
 # ----- Circularity Filter -----
-CIRCULARITY_THRESHOLD = 0.65  # C = 4π·Area / Perimeter² (1.0 = perfect circle)
-                               # 0.65 accommodates motion blur while rejecting hands/arms
+CIRCULARITY_THRESHOLD = 0.70  # C = 4π·Area / Perimeter² (1.0 = perfect circle)
+                               # 0.70 rejects shadows and irregular shapes
+                               # Ball with slight motion blur still passes (~0.72-0.85)
 
 # ----- Aspect Ratio Filter -----
-ASPECT_RATIO_MAX = 2.0  # Major axis / Minor axis (allows motion blur elongation)
-                        # Hands/arms are more elongated and will be rejected
+ASPECT_RATIO_MAX = 1.8  # Major axis / Minor axis (allows motion blur elongation)
+                        # Shadows are elongated (>2.0), ball even with blur is ~1.2-1.6
 
 # ----- Color Verification (Optional) -----
 ENABLE_COLOR_FILTER = False  # Set to True if you know the ball color

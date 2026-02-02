@@ -335,9 +335,11 @@ def local_tracking(mask, roi_box, config):
 class BallTracker:
     """
     Complete ball tracking system with dual-mode search strategy
+    REFACTORED: Implements Tracking-by-Detection architecture
+    Filter ALL candidates (Stage D) -> Select based on state -> Update Kalman
     """
     
-    def __init__(self, config, frame_width, frame_height, foul_line_y):
+    def __init__(self, config, frame_width, frame_height, foul_line_y, blob_analyzer=None):
         """
         Initialize ball tracker
         
@@ -345,11 +347,13 @@ class BallTracker:
             config: Configuration module
             frame_width, frame_height: Frame dimensions
             foul_line_y: Y-coordinate of foul line
+            blob_analyzer: BlobAnalyzer instance for Stage D filtering (optional)
         """
         self.config = config
         self.frame_width = frame_width
         self.frame_height = frame_height
         self.foul_line_y = foul_line_y
+        self.blob_analyzer = blob_analyzer
         
         # Kalman filter
         self.kalman = BallKalmanFilter(
@@ -362,165 +366,376 @@ class BallTracker:
         self.lost_frames = 0
         self.trajectory = []  # List of (x, y) positions
         
+        # NEW: Global search type tracking
+        self.search_type = 'initial'  # 'initial' or 'reactivation'
+        self.last_known_y = None  # Y position when ball last seen
+        self.reactivation_lost_frames = 0  # Frames without detection in reactivation mode
+        
         # Confirmation tracking (Problem 2 solution)
         self.confirmation_counter = 0  # Consecutive successful tracking frames
         self.is_confirmed = False  # True if CONFIRMATION_THRESHOLD reached
         self.total_distance_traveled = 0.0  # Cumulative pixel distance
-        self.last_confirmed_y = None  # Y position where confirmed tracking was lost
         self.last_position = None  # Previous (x, y) for distance calculation
         
         # For global search velocity calculation
         self.recent_detections = deque(maxlen=5)
     
-    def process_frame(self, denoised_mask, frame_idx):
+    def _filter_all_candidates(self, denoised_mask, frame=None):
         """
-        Process single frame: global search or local tracking
+        Stage D: Filter ALL contours in full frame
+        Independent of tracking state - always runs on complete frame
+        
+        Args:
+            denoised_mask: Binary mask from Stage B
+            frame: Original BGR frame (optional, for color filter)
+            
+        Returns:
+            List of validated candidates: [{'center': (x, y), 'radius': r, 'area': a, ...}, ...]
+        """
+        # Find ALL contours in denoised mask
+        contours, _ = cv2.findContours(denoised_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if len(contours) == 0:
+            return []
+        
+        validated_candidates = []
+        
+        # If blob_analyzer is available, use it for filtering
+        if self.blob_analyzer and self.blob_analyzer.is_calibrated:
+            for contour in contours:
+                # Get blob metrics and filter results
+                metrics = self.blob_analyzer.analyze_blob(frame, contour, self.frame_height)
+                
+                # Only keep candidates passing ALL filters
+                if metrics.passes_all_filters:
+                    # Calculate bounding circle for tracking
+                    (cx, cy), radius = cv2.minEnclosingCircle(contour)
+                    
+                    validated_candidates.append({
+                        'center': (int(cx), int(cy)),
+                        'radius': int(radius),
+                        'area': metrics.area,
+                        'circularity': metrics.circularity,
+                        'aspect_ratio': metrics.aspect_ratio,
+                        'contour': contour
+                    })
+        else:
+            # Fallback: Simple area + circularity filtering
+            for contour in contours:
+                area = cv2.contourArea(contour)
+                
+                # Skip tiny contours
+                if area < self.config.MIN_BALL_RADIUS ** 2:
+                    continue
+                
+                # Get centroid
+                M = cv2.moments(contour)
+                if M['m00'] == 0:
+                    continue
+                cx = M['m10'] / M['m00']
+                cy = M['m01'] / M['m00']
+                
+                # Simple circularity check
+                perimeter = cv2.arcLength(contour, True)
+                if perimeter == 0:
+                    continue
+                circularity = 4 * np.pi * area / (perimeter ** 2)
+                
+                if circularity >= 0.5:  # Loose threshold for fallback
+                    (cx, cy), radius = cv2.minEnclosingCircle(contour)
+                    validated_candidates.append({
+                        'center': (int(cx), int(cy)),
+                        'radius': int(radius),
+                        'area': area,
+                        'circularity': circularity,
+                        'contour': contour
+                    })
+        
+        return validated_candidates
+    
+    def _global_search_selection(self, validated_candidates):
+        """
+        Select best candidate from validated list using global search strategy
+        Two modes: Initial (near foul line) vs Reactivation (above last position)
+        
+        Args:
+            validated_candidates: List of candidates passing Stage D filters
+            
+        Returns:
+            Selected candidate dict or None
+        """
+        if len(validated_candidates) == 0:
+            return None
+        
+        if self.search_type == 'initial':
+            # TYPE 1: Initial detection - focus near foul line, exclude upper frame
+            min_y_threshold = self.foul_line_y * self.config.FOUL_LINE_EXCLUSION_FACTOR
+            
+            # Filter to candidates in valid zone (exclude upper 30%)
+            valid_candidates = [
+                c for c in validated_candidates 
+                if c['center'][1] > min_y_threshold
+            ]
+            
+            if len(valid_candidates) == 0:
+                return None
+            
+            # Select candidate closest to foul line (highest Y value)
+            selected = max(valid_candidates, key=lambda c: c['center'][1])
+            
+            return selected
+            
+        else:  # self.search_type == 'reactivation'
+            # TYPE 2: Reactivation - search only above last known position (toward pins)
+            if self.last_known_y is None:
+                # Fallback to initial mode if no last position
+                self.search_type = 'initial'
+                return self._global_search_selection(validated_candidates)
+            
+            # Search above (lower Y) last position with safety margin
+            min_y_search = self.last_known_y - self.config.REACTIVATION_SEARCH_MARGIN
+            
+            # Filter to candidates in valid zone (above last position - margin)
+            valid_candidates = [
+                c for c in validated_candidates 
+                if c['center'][1] > min_y_search
+            ]
+            
+            if len(valid_candidates) == 0:
+                return None
+            
+            # Select candidate closest to last known position
+            def distance_to_last(candidate):
+                cx, cy = candidate['center']
+                if self.last_position:
+                    lx, ly = self.last_position
+                    return np.sqrt((cx - lx)**2 + (cy - ly)**2)
+                else:
+                    return abs(cy - self.last_known_y)
+            
+            selected = min(valid_candidates, key=distance_to_last)
+            
+            return selected
+    
+    def _local_tracking_selection(self, validated_candidates, prediction):
+        """
+        Select best candidate from validated list using local tracking strategy
+        Filters to ROI around Kalman prediction, selects closest
+        
+        Args:
+            validated_candidates: List of candidates passing Stage D filters
+            prediction: Kalman prediction dict {'x', 'y', 'vx', 'vy'}
+            
+        Returns:
+            (selected_candidate, roi_box, roi_size) tuple or (None, None, None)
+        """
+        if len(validated_candidates) == 0 or prediction is None:
+            return None, None, None
+        
+        # Calculate ROI size (perspective-aware)
+        roi_buffer = calculate_roi_size(prediction['y'], self.config)
+        
+        # Create ROI box
+        roi_box = create_roi_box(
+            prediction['x'],
+            prediction['y'],
+            roi_buffer,
+            self.frame_width,
+            self.frame_height
+        )
+        
+        x1, y1, x2, y2 = roi_box
+        
+        # Filter validated candidates to those within ROI
+        candidates_in_roi = [
+            c for c in validated_candidates
+            if (x1 <= c['center'][0] <= x2 and y1 <= c['center'][1] <= y2)
+        ]
+        
+        if len(candidates_in_roi) == 0:
+            return None, roi_box, roi_buffer
+        
+        # Select candidate closest to prediction
+        def distance_to_prediction(candidate):
+            cx, cy = candidate['center']
+            return np.sqrt((cx - prediction['x'])**2 + (cy - prediction['y'])**2)
+        
+        selected = min(candidates_in_roi, key=distance_to_prediction)
+        
+        return selected, roi_box, roi_buffer
+    
+    def _select_candidate(self, validated_candidates, prediction=None):
+        """
+        Dispatcher: Select candidate based on tracking state
+        
+        Args:
+            validated_candidates: List of candidates passing Stage D filters
+            prediction: Kalman prediction (if tracking active)
+            
+        Returns:
+            (selected_candidate, roi_box, roi_size, mode) tuple
+        """
+        if not self.tracking_active:
+            # GLOBAL SEARCH MODE
+            selected = self._global_search_selection(validated_candidates)
+            return selected, None, None, 'global'
+        else:
+            # LOCAL TRACKING MODE
+            selected, roi_box, roi_size = self._local_tracking_selection(
+                validated_candidates, prediction
+            )
+            return selected, roi_box, roi_size, 'local'
+    
+    def _update_state(self, selected_candidate, frame_idx):
+        """
+        Update Kalman filter and state management
+        CRITICAL: Only called with VALIDATED candidates (passed Stage D)
+        
+        Args:
+            selected_candidate: Candidate dict or None
+            frame_idx: Current frame number
+        """
+        if selected_candidate:
+            cx, cy = selected_candidate['center']
+            
+            # Initialize or update Kalman filter
+            if not self.kalman.initialized:
+                self.kalman.initialize(cx, cy)
+            else:
+                self.kalman.update(cx, cy)
+            
+            # Activate tracking
+            if not self.tracking_active:
+                self.tracking_active = True
+                if self.config.VERBOSE and frame_idx % 30 == 0:
+                    print(f"  Frame {frame_idx}: Ball detected! Activating local tracking mode")
+            
+            # Update trajectory and state
+            self.trajectory.append((cx, cy))
+            self.recent_detections.append((cx, cy))
+            self.lost_frames = 0
+            self.last_known_y = cy  # Update last known position
+            self.reactivation_lost_frames = 0  # Reset reactivation timeout counter
+            
+            # Update confirmation tracking
+            self.confirmation_counter += 1
+            
+            # Calculate distance traveled (for spatial confirmation)
+            if self.last_position is not None:
+                prev_x, prev_y = self.last_position
+                distance = np.sqrt((cx - prev_x)**2 + (cy - prev_y)**2)
+                self.total_distance_traveled += distance
+            
+            self.last_position = (cx, cy)
+            
+            # Check if confirmed
+            if self.confirmation_counter >= self.config.CONFIRMATION_THRESHOLD:
+                if not self.is_confirmed:
+                    self.is_confirmed = True
+                    if self.config.VERBOSE:
+                        print(f"  Frame {frame_idx}: Ball CONFIRMED (tracked {self.confirmation_counter} frames, traveled {self.total_distance_traveled:.1f}px)")
+        
+        else:
+            # No detection
+            self.lost_frames += 1
+            
+            # Increment reactivation timeout counter if in reactivation mode
+            if self.search_type == 'reactivation' and not self.tracking_active:
+                self.reactivation_lost_frames += 1
+                
+                # Check if reactivation search has timed out
+                if self.reactivation_lost_frames >= self.config.REACTIVATION_TIMEOUT:
+                    # Reset to initial search (full frame)
+                    self.search_type = 'initial'
+                    self.last_known_y = None
+                    self.reactivation_lost_frames = 0
+                    if self.config.VERBOSE:
+                        print(f"  Frame {frame_idx}: Reactivation timeout ({self.config.REACTIVATION_TIMEOUT} frames). Resetting to full frame search")
+            
+            if self.tracking_active and self.lost_frames >= self.config.MAX_LOST_FRAMES:
+                # Determine search strategy based on confirmation status
+                use_restricted_search = (
+                    self.is_confirmed and 
+                    self.total_distance_traveled >= self.config.SPATIAL_CONFIRMATION_DISTANCE and
+                    self.last_position is not None
+                )
+                
+                if use_restricted_search:
+                    # CONFIRMED BALL: Switch to reactivation mode
+                    self.search_type = 'reactivation'
+                    if self.config.VERBOSE:
+                        print(f"  Frame {frame_idx}: Confirmed ball lost. Reactivation search (y > {self.last_known_y - self.config.REACTIVATION_SEARCH_MARGIN:.0f})")
+                else:
+                    # UNCONFIRMED OBJECT: Reset to initial mode
+                    self.search_type = 'initial'
+                    if self.config.VERBOSE:
+                        reason = "unconfirmed tracking" if not self.is_confirmed else f"short distance ({self.total_distance_traveled:.1f}px)"
+                        print(f"  Frame {frame_idx}: Ball lost ({reason}). Initial global search activated")
+                
+                # Revert to global search
+                self.tracking_active = False
+                self.kalman = BallKalmanFilter(
+                    self.config.KALMAN_PROCESS_NOISE,
+                    self.config.KALMAN_MEASUREMENT_NOISE
+                )
+                
+                # Reset confirmation tracking if not confirmed
+                # NOTE: Do NOT reset last_known_y here - keep it for potential reactivation
+                if not use_restricted_search:
+                    self.confirmation_counter = 0
+                    self.is_confirmed = False
+                    self.total_distance_traveled = 0.0
+    
+    def process_frame(self, denoised_mask, frame_idx, frame=None):
+        """
+        Process single frame with new architecture
+        Filter ALL → Select based on state → Update Kalman
         
         Args:
             denoised_mask: Binary mask from Stage B
             frame_idx: Frame number
+            frame: Original BGR frame (optional, for Stage D color filter)
             
         Returns:
             dict: {
                 'detection': {center, radius, ...} or None,
                 'prediction': {x, y, vx, vy} or None,
                 'mode': 'global' or 'local',
+                'search_type': 'initial' or 'reactivation' (if global),
                 'roi_box': (x1, y1, x2, y2) or None,
-                'roi_size': buffer size or None
+                'roi_size': buffer size or None,
+                'all_candidates': List of all validated candidates,
+                'candidates_count': Number of validated candidates
             }
         """
-        result = {
-            'detection': None,
-            'prediction': None,
-            'mode': None,
-            'roi_box': None,
-            'roi_size': None
-        }
+        # STEP 1: Filter ALL candidates (Stage D - full frame, independent)
+        validated_candidates = self._filter_all_candidates(denoised_mask, frame)
         
-        if not self.tracking_active:
-            # GLOBAL SEARCH MODE
-            result['mode'] = 'global'
-            
-            # Determine search boundary (Problem 2 solution)
-            max_y = self.last_confirmed_y if self.last_confirmed_y is not None else None
-            
-            detection = global_search(
-                denoised_mask,
-                self.config,
-                self.foul_line_y,
-                list(self.recent_detections),
-                max_y_boundary=max_y
-            )
-            
-            if detection:
-                result['detection'] = detection
-                cx, cy = detection['center']
-                
-                # Initialize Kalman filter
-                if not self.kalman.initialized:
-                    self.kalman.initialize(cx, cy)
-                else:
-                    self.kalman.update(cx, cy)
-                
-                # Activate tracking
-                self.tracking_active = True
-                self.lost_frames = 0
-                self.last_position = (cx, cy)  # Initialize for distance calculation
-                self.trajectory.append((cx, cy))
-                self.recent_detections.append((cx, cy))
-                
-                if self.config.VERBOSE and frame_idx % 30 == 0:
-                    print(f"  Frame {frame_idx}: Ball detected! Activating local tracking mode")
-        
-        else:
-            # LOCAL TRACKING MODE
-            result['mode'] = 'local'
-            
-            # Predict next position
+        # STEP 2: Predict next position (if tracking)
+        prediction = None
+        if self.tracking_active:
             prediction = self.kalman.predict()
-            result['prediction'] = prediction
-            
-            if prediction:
-                # Calculate ROI size (perspective-aware)
-                roi_buffer = calculate_roi_size(prediction['y'], self.config)
-                result['roi_size'] = roi_buffer
-                
-                # Create ROI box
-                roi_box = create_roi_box(
-                    prediction['x'],
-                    prediction['y'],
-                    roi_buffer,
-                    self.frame_width,
-                    self.frame_height
-                )
-                result['roi_box'] = roi_box
-                
-                # Search in ROI
-                detection = local_tracking(denoised_mask, roi_box, self.config)
-                
-                if detection:
-                    result['detection'] = detection
-                    cx, cy = detection['center']
-                    
-                    # Update Kalman filter
-                    self.kalman.update(cx, cy)
-                    self.trajectory.append((cx, cy))
-                    self.recent_detections.append((cx, cy))
-                    self.lost_frames = 0
-                    
-                    # Update confirmation tracking
-                    self.confirmation_counter += 1
-                    
-                    # Calculate distance traveled (for spatial confirmation)
-                    if self.last_position is not None:
-                        prev_x, prev_y = self.last_position
-                        distance = np.sqrt((cx - prev_x)**2 + (cy - prev_y)**2)
-                        self.total_distance_traveled += distance
-                    
-                    self.last_position = (cx, cy)
-                    
-                    # Check if confirmed
-                    if self.confirmation_counter >= self.config.CONFIRMATION_THRESHOLD:
-                        if not self.is_confirmed:
-                            self.is_confirmed = True
-                            if self.config.VERBOSE:
-                                print(f"  Frame {frame_idx}: Ball CONFIRMED (tracked {self.confirmation_counter} frames, traveled {self.total_distance_traveled:.1f}px)")
-                else:
-                    # Ball lost
-                    self.lost_frames += 1
-                    
-                    if self.lost_frames >= self.config.MAX_LOST_FRAMES:
-                        # Determine search strategy based on confirmation status
-                        use_restricted_search = (
-                            self.is_confirmed and 
-                            self.total_distance_traveled >= self.config.SPATIAL_CONFIRMATION_DISTANCE and
-                            self.last_position is not None
-                        )
-                        
-                        if use_restricted_search:
-                            # CONFIRMED BALL: Restrict search to prevent re-detecting behind last position
-                            self.last_confirmed_y = self.last_position[1] - self.config.SEARCH_BUFFER
-                            if self.config.VERBOSE:
-                                print(f"  Frame {frame_idx}: Confirmed ball lost. Restricting search to y < {self.last_confirmed_y:.0f}")
-                        else:
-                            # UNCONFIRMED OBJECT: Full reset (might have been hand)
-                            if self.config.VERBOSE:
-                                reason = "unconfirmed tracking" if not self.is_confirmed else f"short distance ({self.total_distance_traveled:.1f}px)"
-                                print(f"  Frame {frame_idx}: Ball lost ({reason}). Full lane search activated")
-                        
-                        # Revert to global search
-                        self.tracking_active = False
-                        self.kalman = BallKalmanFilter(
-                            self.config.KALMAN_PROCESS_NOISE,
-                            self.config.KALMAN_MEASUREMENT_NOISE
-                        )
-                        
-                        # Reset confirmation tracking if not confirmed
-                        if not use_restricted_search:
-                            self.confirmation_counter = 0
-                            self.is_confirmed = False
-                            self.total_distance_traveled = 0.0
-                            self.last_confirmed_y = None
+        
+        # STEP 3: Select best candidate based on tracking state
+        selected, roi_box, roi_size, mode = self._select_candidate(
+            validated_candidates, prediction
+        )
+        
+        # STEP 4: Update Kalman filter and state (ONLY with validated candidate)
+        self._update_state(selected, frame_idx)
+        
+        # Return complete result
+        result = {
+            'detection': selected,
+            'prediction': prediction,
+            'mode': mode,
+            'search_type': self.search_type if mode == 'global' else None,
+            'roi_box': roi_box,
+            'roi_size': roi_size,
+            'all_candidates': validated_candidates,
+            'candidates_count': len(validated_candidates),
+            'last_known_y': self.last_known_y  # For reactivation zone visualization
+        }
         
         return result
 

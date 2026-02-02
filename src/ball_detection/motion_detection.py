@@ -81,6 +81,8 @@ def apply_background_subtraction(masked_frames_generator, config, save_videos=Tr
         print(f"Detect Shadows: {config.MOG2_DETECT_SHADOWS}")
         print(f"Shadow Threshold: {config.SHADOW_THRESHOLD}")
         print(f"Morphological Kernel: {config.MORPH_KERNEL_SHAPE} {config.MORPH_KERNEL_SIZE}x{config.MORPH_KERNEL_SIZE}")
+        if config.USE_SHADOW_SEPARATION:
+            print(f"Shadow Separation: {config.SHADOW_SEPARATION_ITERATIONS} erosion iterations")
         print("="*60 + "\n")
     
     # Process each frame
@@ -98,11 +100,18 @@ def apply_background_subtraction(masked_frames_generator, config, save_videos=Tr
             cv2.THRESH_BINARY
         )
         
-        # Stage B.3: Noise Removal (Morphological Opening)
+        # Stage B.3: Shadow Separation (CRITICAL: separates ball from attached shadow)
+        # Apply extra erosion to disconnect ball from shadow before opening
+        if config.USE_SHADOW_SEPARATION:
+            separated = cv2.erode(shadow_removed, kernel, iterations=config.SHADOW_SEPARATION_ITERATIONS)
+        else:
+            separated = shadow_removed
+        
+        # Stage B.4: Noise Removal (Morphological Opening)
         # Opening = Erosion followed by Dilation
         # Removes small white noise (salt) while preserving larger structures (ball)
         denoised_mask = cv2.morphologyEx(
-            shadow_removed, 
+            separated, 
             cv2.MORPH_OPEN, 
             kernel
         )
@@ -111,6 +120,7 @@ def apply_background_subtraction(masked_frames_generator, config, save_videos=Tr
         intermediate_masks = {
             'foreground': foreground_mask,
             'shadow_removed': shadow_removed,
+            'separated': separated if config.USE_SHADOW_SEPARATION else shadow_removed,
             'denoised': denoised_mask,
             'original_masked': masked_frame  # Include original for comparison
         }

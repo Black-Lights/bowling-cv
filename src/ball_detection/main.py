@@ -110,11 +110,15 @@ def main():
                 else:
                     print(f"✗ Failed motion detection: {video_file}\n")
             
-            # Step 4: ROI Logic with Kalman filter tracking (Stage C)
-            if not args.skip_roi:
+            # Step 4: ROI Logic with Kalman filter tracking (Stage C) - LEGACY VISUALIZATION
+            # This step generates visualization videos using the OLD separate Stage C approach
+            # For actual ball detection, use Step 5 (integrated C+D+E)
+            if not args.skip_roi and args.skip_blob:
                 print(f"\n{'='*60}")
-                print(f"Step 4: ROI Logic & Tracking - {video_file}")
+                print(f"Step 4: ROI Logic & Tracking (Legacy) - {video_file}")
                 print(f"{'='*60}")
+                print("Note: This is legacy ROI-only visualization.")
+                print("For full ball detection, don't skip blob analysis (Step 5).")
                 
                 result = generate_roi_videos(video_file, config, str(output_base_dir))
                 
@@ -126,10 +130,12 @@ def main():
                 else:
                     print(f"✗ Failed ROI tracking: {video_file}\n")
             
-            # Step 5: Integrated ROI Tracking + Blob Analysis (Stage C+D)
-            if not args.skip_roi and not args.skip_blob:
+            # Step 5: Integrated Ball Detection (Stage C+D+E) - NEW ARCHITECTURE
+            # This is the main ball detection step using Tracking-by-Detection
+            # Filter ALL → Select based on state → Update Kalman
+            if not args.skip_blob:
                 print(f"\n{'='*60}")
-                print(f"Step 5: ROI Tracking + Blob Analysis - {video_file}")
+                print(f"Step 5: Integrated Ball Detection (Stages C+D+E)")
                 print(f"{'='*60}")
                 
                 # Import dependencies
@@ -139,6 +145,7 @@ def main():
                 from ball_detection.mask_video import create_masked_lane_video
                 from ball_detection.motion_detection import apply_background_subtraction
                 from ball_detection.roi_logic import BallTracker
+                from ball_detection.blob_analysis import BlobAnalyzer
                 
                 # Get video path
                 video_path = Path(config.ASSETS_DIR) / video_file
@@ -164,11 +171,12 @@ def main():
                 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 cap.release()
                 
-                # Initialize tracker and blob analyzer
-                tracker = BallTracker(config, width, height, foul_line_y)
+                # Initialize blob analyzer and tracker (integrated)
                 analyzer = BlobAnalyzer(config)
+                tracker = BallTracker(config, width, height, foul_line_y, blob_analyzer=analyzer)
                 
-                print("Processing frames with ROI tracking + blob filtering...")
+                print("Architecture: Filter ALL (Stage D) -> Select (Stage C) -> Track (Stage E)")
+                print("Processing frames with integrated tracking...")
                 
                 # Get masked frames generator
                 masked_frames_gen = create_masked_lane_video(video_file, config, save_video=False)
@@ -178,39 +186,49 @@ def main():
                 
                 frames = []
                 masks = []
-                roi_results = []
-                blob_metrics_list = []
+                tracking_results = []
                 
                 for frame_idx, denoised_mask, metadata, intermediate in motion_gen:
                     frame = intermediate['original_masked']
                     
-                    # Stage C: ROI tracking
-                    roi_result = tracker.process_frame(denoised_mask, frame_idx)
+                    # INTEGRATED: Tracker handles everything
+                    # 1. Filters ALL candidates (Stage D full-frame)
+                    # 2. Selects based on tracking state (Stage C)
+                    # 3. Updates Kalman filter (Stage E)
+                    result = tracker.process_frame(denoised_mask, frame_idx, frame)
                     
-                    # Stage D: Blob filtering within ROI
-                    if roi_result['roi_box'] is not None:
-                        # Extract ROI region
-                        x1, y1, x2, y2 = roi_result['roi_box']
-                        roi_mask = np.zeros_like(denoised_mask)
-                        roi_mask[y1:y2, x1:x2] = denoised_mask[y1:y2, x1:x2]
-                        
-                        # Filter blobs only in ROI
-                        blob_metrics = analyzer.filter_blobs(frame, roi_mask, frame_idx)
-                    else:
-                        # No ROI - analyze full frame (global search)
-                        blob_metrics = analyzer.filter_blobs(frame, denoised_mask, frame_idx)
+                    # Auto-calibrate blob analyzer in first frames
+                    if not analyzer.is_calibrated:
+                        # Get contours for calibration
+                        contours, _ = cv2.findContours(denoised_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                        analyzer.auto_calibrate(frame, contours, height, foul_line_y)
                     
                     frames.append(frame)
                     masks.append(denoised_mask)
-                    roi_results.append(roi_result)
-                    blob_metrics_list.append(blob_metrics)
+                    tracking_results.append(result)
+                    
+                    # Logging progress
+                    if frame_idx % 30 == 0:
+                        print(f"  Frame {frame_idx}: Mode={result['mode']}, "
+                              f"Candidates={result['candidates_count']}, "
+                              f"Detected={'Yes' if result['detection'] else 'No'}")
+                
+                print(f"\n✓ Integrated tracking complete for {video_file}")
+                print(f"  Total frames processed: {len(frames)}")
+                print(f"  Architecture: Tracking-by-Detection (Filter -> Select -> Track)")
                 
                 # Generate visualization videos
-                blob_output_dir = str(output_base_dir / 'ball_detection' / 'intermediate')
-                generate_blob_videos(video_name, frames, masks, blob_metrics_list, 
-                                   analyzer, blob_output_dir, config)
+                from ball_detection.integrated_visualization import generate_integrated_tracking_videos
                 
-                print(f"\n✓ ROI tracking + Blob analysis complete for {video_file}")
+                integrated_output_dir = str(output_base_dir / 'ball_detection' / 'intermediate')
+                result = generate_integrated_tracking_videos(
+                    video_name, frames, masks, tracking_results, config, integrated_output_dir
+                )
+                
+                if result:
+                    print(f"\n✓ Visualization videos generated:")
+                    for name, path in result.items():
+                        print(f"    - {name}: {Path(path).name}")
                 
         except FileNotFoundError as e:
             print(f"\n✗ Error processing {video_file}:")
