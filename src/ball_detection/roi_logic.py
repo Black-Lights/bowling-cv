@@ -377,8 +377,87 @@ class BallTracker:
         self.total_distance_traveled = 0.0  # Cumulative pixel distance
         self.last_position = None  # Previous (x, y) for distance calculation
         
+        # Stage F: Stop condition (pin impact)
+        self.trajectory_complete = False  # True when ball reaches pin area
+        self.stop_frame = None  # Frame number where tracking stopped
+        self.interpolated_points = []  # List of extrapolated (x, y) points
+        self.stop_threshold_y = None  # Calculated in set_boundaries()
+        self.top_boundary_y = None  # Loaded from Phase 1 data
+        
         # For global search velocity calculation
         self.recent_detections = deque(maxlen=5)
+    
+    def set_boundaries(self, top_boundary_y):
+        """
+        Set top boundary from Phase 1 and calculate stop threshold
+        
+        Args:
+            top_boundary_y: Y-coordinate of top boundary (green line) from Phase 1
+        """
+        self.top_boundary_y = top_boundary_y
+        
+        if self.config.ENABLE_STOP_CONDITION:
+            # Calculate stop threshold: top_boundary + 3% of frame height
+            threshold_offset = int(self.config.STOP_THRESHOLD_PCT * self.frame_height)
+            self.stop_threshold_y = top_boundary_y + threshold_offset
+            
+            if self.config.VERBOSE:
+                print(f"\n{'='*60}")
+                print(f"STAGE F: STOP CONDITION INITIALIZED")
+                print(f"{'='*60}")
+                print(f"  Top Boundary (pins): Y = {top_boundary_y}")
+                print(f"  Frame Height: {self.frame_height}px")
+                print(f"  Threshold Offset: {threshold_offset}px ({self.config.STOP_THRESHOLD_PCT*100:.1f}% of height)")
+                print(f"  Stop Threshold: Y <= {self.stop_threshold_y}")
+                print(f"  -> Tracking will stop when ball reaches Y <= {self.stop_threshold_y}")
+                print(f"{'='*60}\n")
+    
+    def _interpolate_trajectory(self, last_x, last_y, frame_idx):
+        """
+        Interpolate trajectory beyond last detection to/past top boundary
+        Uses linear extrapolation based on last known velocity from Kalman filter
+        
+        Args:
+            last_x: X coordinate of last detection
+            last_y: Y coordinate of last detection
+            frame_idx: Frame number of last detection
+        """
+        if not self.kalman.initialized:
+            return
+        
+        # Get velocity from Kalman filter
+        state = self.kalman.kf.statePost
+        vx = state[2, 0]
+        vy = state[3, 0]
+        
+        # Check if ball is moving toward pins (negative Y velocity)
+        if vy >= 0:
+            if self.config.VERBOSE:
+                print(f"  Warning: Ball not moving toward pins (vy={vy:.2f}). Skipping interpolation.")
+            return
+        
+        # Calculate interpolation target: top_boundary - 5% of frame height
+        beyond_offset = int(self.config.INTERPOLATE_BEYOND_PCT * self.frame_height)
+        target_y = self.top_boundary_y - beyond_offset
+        
+        # Calculate time (in frames) to reach target
+        delta_y = target_y - last_y
+        time_steps = delta_y / vy if vy != 0 else 0
+        
+        # Calculate final interpolated position
+        final_x = last_x + (vx * time_steps)
+        final_y = target_y
+        
+        # Store interpolated point
+        self.interpolated_points = [(int(final_x), int(final_y))]
+        
+        if self.config.VERBOSE:
+            print(f"  Interpolation:")
+            print(f"    Last detection: ({last_x}, {last_y})")
+            print(f"    Velocity: vx={vx:.2f}, vy={vy:.2f} px/frame")
+            print(f"    Target Y: {target_y} (top_boundary - {self.config.INTERPOLATE_BEYOND_PCT*100:.1f}%)")
+            print(f"    Time to target: {time_steps:.1f} frames")
+            print(f"    Interpolated point: ({int(final_x)}, {int(final_y)})")
     
     def _filter_all_candidates(self, denoised_mask, frame=None):
         """
@@ -634,6 +713,28 @@ class BallTracker:
                     self.is_confirmed = True
                     if self.config.VERBOSE:
                         print(f"  Frame {frame_idx}: Ball CONFIRMED (tracked {self.confirmation_counter} frames, traveled {self.total_distance_traveled:.1f}px)")
+            
+            # STAGE F: Check stop condition (pin impact)
+            if (self.config.ENABLE_STOP_CONDITION and 
+                self.is_confirmed and 
+                not self.trajectory_complete and
+                self.stop_threshold_y is not None):
+                
+                # Check if ball reached pin area (Y <= stop_threshold)
+                if cy <= self.stop_threshold_y:
+                    self.trajectory_complete = True
+                    self.stop_frame = frame_idx
+                    
+                    if self.config.VERBOSE:
+                        print(f"\n{'='*60}")
+                        print(f"  Frame {frame_idx}: TRAJECTORY COMPLETE!")
+                        print(f"  Ball reached pin area: Y={cy} <= {self.stop_threshold_y}")
+                        print(f"  Total trajectory points: {len(self.trajectory)}")
+                        print(f"{'='*60}\n")
+                    
+                    # Optional: Interpolate trajectory to/beyond top boundary
+                    if self.config.INTERPOLATE_TO_BOUNDARY:
+                        self._interpolate_trajectory(cx, cy, frame_idx)
         
         else:
             # No detection
@@ -734,7 +835,12 @@ class BallTracker:
             'roi_size': roi_size,
             'all_candidates': validated_candidates,
             'candidates_count': len(validated_candidates),
-            'last_known_y': self.last_known_y  # For reactivation zone visualization
+            'last_known_y': self.last_known_y,  # For reactivation zone visualization
+            # Stage F: Stop condition fields
+            'trajectory_complete': self.trajectory_complete,
+            'stop_frame': self.stop_frame,
+            'interpolated_points': self.interpolated_points.copy() if self.interpolated_points else [],
+            'stop_threshold_y': self.stop_threshold_y
         }
         
         return result

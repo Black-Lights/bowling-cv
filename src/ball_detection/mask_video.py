@@ -109,7 +109,7 @@ def create_masked_lane_video(video_path: str, config, save_video=None):
     # If not saving video, result is a generator - wrap it with metadata
     if not save_video:
         if config.VERBOSE:
-            print(f"✓ Frame generator ready")
+            print(f">>> Frame generator ready")
             print(f"  Use: for idx, frame, meta in generator:")
             print(f"       # Process frame directly without video I/O")
         
@@ -120,7 +120,7 @@ def create_masked_lane_video(video_path: str, config, save_video=None):
     if result:
         if config.VERBOSE:
             print(f"\n{'='*80}")
-            print(f"✓ Success!")
+            print(f">>> Success!")
             print(f"{'='*80}")
             print(f"Masked video saved to:")
             print(f"  {output_path}")
@@ -137,7 +137,7 @@ def create_masked_lane_video(video_path: str, config, save_video=None):
         }
     else:
         if config.VERBOSE:
-            print("✗ Error: Could not create masked video")
+            print("ERROR: Could not create masked video")
         return None
 
 
@@ -159,13 +159,13 @@ if __name__ == "__main__":
         result = create_masked_lane_video(video_file, config)
         
         if result:
-            print("\n✓ Masking test successful!")
+            print("\n>>> Masking test successful!")
         else:
-            print("\n✗ Masking test failed!")
+            print("\nERROR: Masking test failed!")
             
     except FileNotFoundError as e:
-        print(f"\n✗ Error: {e}")
+        print(f"\nERROR: {e}")
     except Exception as e:
-        print(f"\n✗ Error: {e}")
+        print(f"\nERROR: {e}")
         import traceback
         traceback.print_exc()

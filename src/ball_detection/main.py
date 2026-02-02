@@ -86,13 +86,13 @@ def main():
             if not args.skip_masking and config.SAVE_MASKED_VIDEO:
                 result = create_masked_lane_video(video_file, config, save_video=True)
                 if not result:
-                    print(f"✗ Failed to create masked video: {video_file}\n")
+                    print(f"ERROR: Failed to create masked video: {video_file}\n")
             
             # Step 2: Create perspective-corrected video (if enabled and not skipped)
             if not args.skip_transform and config.SAVE_TRANSFORMED_VIDEO:
                 result = create_transformed_video(video_file, config)
                 if not result:
-                    print(f"✗ Failed to create transformed video: {video_file}\n")
+                    print(f"ERROR: Failed to create transformed video: {video_file}\n")
             
             # Step 3: Motion detection with background subtraction (Stage B)
             if not args.skip_motion:
@@ -103,12 +103,12 @@ def main():
                 result = save_motion_detection_videos(video_file, config, str(output_base_dir))
                 
                 if result:
-                    print(f"\n✓ Motion detection complete for {video_file}")
+                    print(f"\n>>> Motion detection complete for {video_file}")
                     print(f"  Generated {len(result)} videos:")
                     for name, path in result.items():
                         print(f"    - {name}: {Path(path).name}")
                 else:
-                    print(f"✗ Failed motion detection: {video_file}\n")
+                    print(f"ERROR: Failed motion detection: {video_file}\n")
             
             # Step 4: ROI Logic with Kalman filter tracking (Stage C) - LEGACY VISUALIZATION
             # This step generates visualization videos using the OLD separate Stage C approach
@@ -123,12 +123,12 @@ def main():
                 result = generate_roi_videos(video_file, config, str(output_base_dir))
                 
                 if result:
-                    print(f"\n✓ ROI tracking complete for {video_file}")
+                    print(f"\n>>> ROI tracking complete for {video_file}")
                     print(f"  Generated {len(result)} videos:")
                     for name, path in result.items():
                         print(f"    - {name}: {Path(path).name}")
                 else:
-                    print(f"✗ Failed ROI tracking: {video_file}\n")
+                    print(f"ERROR: Failed ROI tracking: {video_file}\n")
             
             # Step 5: Integrated Ball Detection (Stage C+D+E) - NEW ARCHITECTURE
             # This is the main ball detection step using Tracking-by-Detection
@@ -150,13 +150,13 @@ def main():
                 # Get video path
                 video_path = Path(config.ASSETS_DIR) / video_file
                 if not video_path.exists():
-                    print(f"✗ Video not found: {video_path}")
+                    print(f"ERROR: Video not found: {video_path}")
                     continue
                     
                 # Load boundary data
                 boundary_path = output_base_dir / 'boundary_data.json'
                 if not boundary_path.exists():
-                    print(f"✗ Boundary data not found: {boundary_path}")
+                    print(f"ERROR: Boundary data not found: {boundary_path}")
                     print("  Run Phase 1 first to generate boundary data")
                     continue
                     
@@ -164,6 +164,7 @@ def main():
                     boundary_data = json.load(f)
                 
                 foul_line_y = boundary_data['median_foul_params']['center_y']
+                top_boundary_y = boundary_data.get('top_boundary', {}).get('y_position', None)
                 
                 # Get video dimensions
                 cap = cv2.VideoCapture(str(video_path))
@@ -174,6 +175,12 @@ def main():
                 # Initialize blob analyzer and tracker (integrated)
                 analyzer = BlobAnalyzer(config)
                 tracker = BallTracker(config, width, height, foul_line_y, blob_analyzer=analyzer)
+                
+                # Set top boundary for stop condition (Stage F)
+                if top_boundary_y is not None:
+                    tracker.set_boundaries(top_boundary_y)
+                else:
+                    print("  Warning: Top boundary not found in boundary data. Stop condition disabled.")
                 
                 print("Architecture: Filter ALL (Stage D) -> Select (Stage C) -> Track (Stage E)")
                 print("Processing frames with integrated tracking...")
@@ -212,10 +219,21 @@ def main():
                         print(f"  Frame {frame_idx}: Mode={result['mode']}, "
                               f"Candidates={result['candidates_count']}, "
                               f"Detected={'Yes' if result['detection'] else 'No'}")
+                    
+                    # STAGE F: Break loop if trajectory complete (ball reached pins)
+                    if result.get('trajectory_complete', False):
+                        print(f"\n  -> Trajectory complete at frame {frame_idx}. Stopping tracking.")
+                        break
                 
-                print(f"\n✓ Integrated tracking complete for {video_file}")
+                print(f"\n>>> Integrated tracking complete for {video_file}")
                 print(f"  Total frames processed: {len(frames)}")
                 print(f"  Architecture: Tracking-by-Detection (Filter -> Select -> Track)")
+                
+                if tracking_results and tracking_results[-1].get('trajectory_complete', False):
+                    print(f"  Trajectory: Complete (stopped at pin area)")
+                    print(f"  Valid trajectory points: {len(tracker.trajectory)}")
+                    if tracker.interpolated_points:
+                        print(f"  Interpolated points: {len(tracker.interpolated_points)}")
                 
                 # Generate visualization videos
                 from ball_detection.integrated_visualization import generate_integrated_tracking_videos
@@ -226,16 +244,41 @@ def main():
                 )
                 
                 if result:
-                    print(f"\n✓ Visualization videos generated:")
+                    print(f"\n>>> Visualization videos generated:")
                     for name, path in result.items():
                         print(f"    - {name}: {Path(path).name}")
                 
+                # Save trajectory points for post-processing
+                print(f"\nSaving trajectory data...")
+                from ball_detection.trajectory_plot import save_trajectory_points
+                
+                save_trajectory_points(
+                    tracker, output_base_dir / 'ball_detection',
+                    video_name, config
+                )
+                
+                # Generate trajectory plots (original and overhead views)
+                print(f"\nGenerating trajectory plots...")
+                from ball_detection.trajectory_plot import plot_trajectory_on_original, plot_trajectory_on_overhead
+                
+                # Plot on original perspective view
+                plot_trajectory_on_original(
+                    tracker, frames, tracking_results,
+                    output_base_dir / 'ball_detection', video_name, config
+                )
+                
+                # Plot on transformed overhead view (with homography)
+                plot_trajectory_on_overhead(
+                    tracker, output_base_dir / 'ball_detection',
+                    video_name, config
+                )
+                
         except FileNotFoundError as e:
-            print(f"\n✗ Error processing {video_file}:")
+            print(f"\nERROR: Error processing {video_file}:")
             print(f"  {e}\n")
             continue
         except Exception as e:
-            print(f"\n✗ Error processing {video_file}: {e}")
+            print(f"\nERROR: Error processing {video_file}: {e}")
             import traceback
             traceback.print_exc()
             continue

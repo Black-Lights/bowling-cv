@@ -189,6 +189,26 @@ SAVE_BLOB_FILTER_COMPARISON_VIDEO = True     # Side-by-side raw vs filtered
 SAVE_FULL_BLOB_PIPELINE_VIDEO = True         # 2x3 grid showing all stages
 
 # ============================================
+# STAGE F: STOP CONDITION (PIN IMPACT)
+# ============================================
+
+# Stop tracking when ball reaches pin area
+ENABLE_STOP_CONDITION = True                 # Enable automatic stop when near pins
+STOP_THRESHOLD_PCT = 0.01                    # Stop when Y ≤ (top_boundary + 3% of frame_height)
+                                             # Example: If top=130, height=800, stop at Y≤154
+
+# Trajectory Interpolation (optional mathematical extension)
+INTERPOLATE_TO_BOUNDARY = True               # Extend trajectory beyond last detection
+INTERPOLATE_BEYOND_PCT = 0.02                # Extrapolate to (top_boundary - 5% of frame_height)
+                                             # Example: If top=130, height=800, extrapolate to Y=90
+MARK_INTERPOLATED_POINTS = True              # Visual distinction in plots (dashed line)
+
+# Visualization
+SHOW_STOP_THRESHOLD_LINE = True              # Draw stop threshold in debug videos
+STOP_THRESHOLD_COLOR = (255, 0, 255)         # Magenta line for stop threshold
+INTERPOLATION_COLOR = (0, 165, 255)          # Orange for interpolated trajectory section
+
+# ============================================
 # DEBUG & LOGGING
 # ============================================
 

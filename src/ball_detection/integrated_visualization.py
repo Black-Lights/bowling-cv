@@ -114,7 +114,7 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
         
         writer.release()
         result_paths['candidates'] = str(output_path)
-        print(f"✓ Saved: {output_path.name}")
+        print(f">>> Saved: {output_path.name}")
     
     # Video 2: Selection Strategy (Global vs Local)
     output_path = output_dir / f"{video_name}_integrated_selection.mp4"
@@ -198,6 +198,19 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
             cx, cy = result['detection']['center']
             radius = result['detection']['radius']
             cv2.circle(vis, (cx, cy), radius + 5, (0, 255, 255), 3)
+        
+        # STAGE F: Draw stop threshold line (if enabled)
+        if config.SHOW_STOP_THRESHOLD_LINE and result.get('stop_threshold_y') is not None:
+            stop_y = int(result['stop_threshold_y'])  # Convert to int for OpenCV
+            color = config.STOP_THRESHOLD_COLOR  # Magenta
+            cv2.line(vis, (0, stop_y), (width, stop_y), color, 2)
+            cv2.putText(vis, f"Stop Threshold Y={stop_y}", (width - 250, stop_y - 10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            
+            # Show trajectory status if complete
+            if result.get('trajectory_complete', False):
+                cv2.putText(vis, "TRAJECTORY COMPLETE", (width//2 - 150, 60),
+                           cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 3)
             cv2.circle(vis, (cx, cy), 3, (0, 255, 255), -1)
         
         # Info overlay
@@ -214,13 +227,15 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
     
     writer.release()
     result_paths['selection'] = str(output_path)
-    print(f"✓ Saved: {output_path.name}")
+    print(f">>> Saved: {output_path.name}")
     
     # Video 3: Trajectory View
     output_path = output_dir / f"{video_name}_integrated_trajectory.mp4"
     writer = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
     
     trajectory_points = []
+    interpolated_added = False
+    
     for frame_idx, (frame, result) in enumerate(tqdm(zip(frames, tracking_results), 
                                                       total=len(frames), 
                                                       desc="Trajectory View")):
@@ -231,7 +246,13 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
             cx, cy = result['detection']['center']
             trajectory_points.append((cx, cy))
         
-        # Draw trajectory trail (last 50 points)
+        # Add interpolated points (only once when trajectory complete)
+        if (not interpolated_added and 
+            result.get('trajectory_complete', False) and 
+            result.get('interpolated_points')):
+            interpolated_added = True
+        
+        # Draw REAL trajectory trail (solid line)
         if len(trajectory_points) > 1:
             trail = trajectory_points[-50:]
             for i in range(1, len(trail)):
@@ -240,10 +261,34 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
                 color = (int(255 * alpha), int(165 * alpha), 0)  # Orange gradient
                 cv2.line(vis, trail[i-1], trail[i], color, 2)
         
+        # Draw INTERPOLATED trajectory (dashed line)
+        if interpolated_added and result.get('interpolated_points'):
+            last_real = trajectory_points[-1]
+            for interp_point in result['interpolated_points']:
+                # Dashed line from last real to interpolated
+                num_dashes = 10
+                for j in range(num_dashes):
+                    t1 = j / num_dashes
+                    t2 = (j + 0.5) / num_dashes
+                    x1 = int(last_real[0] + t1 * (interp_point[0] - last_real[0]))
+                    y1 = int(last_real[1] + t1 * (interp_point[1] - last_real[1]))
+                    x2 = int(last_real[0] + t2 * (interp_point[0] - last_real[0]))
+                    y2 = int(last_real[1] + t2 * (interp_point[1] - last_real[1]))
+                    cv2.line(vis, (x1, y1), (x2, y2), config.INTERPOLATION_COLOR, 2)
+                
+                # Mark interpolated endpoint
+                cv2.circle(vis, interp_point, 6, config.INTERPOLATION_COLOR, -1)
+                cv2.putText(vis, "Extrapolated", (interp_point[0] + 10, interp_point[1]),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.5, config.INTERPOLATION_COLOR, 2)
+        
         # Draw current position
         if result['detection']:
             cx, cy = result['detection']['center']
             cv2.circle(vis, (cx, cy), 8, (0, 255, 255), -1)
+        
+        # Show trajectory count
+        cv2.putText(vis, f"Trajectory Points: {len(trajectory_points)}", (10, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
         
         # Info
         cv2.putText(vis, f"Frame: {frame_idx}", (10, 30),
@@ -255,7 +300,7 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
     
     writer.release()
     result_paths['trajectory'] = str(output_path)
-    print(f"✓ Saved: {output_path.name}")
+    print(f">>> Saved: {output_path.name}")
     
     # Video 4: Debug Overlay (Complete)
     output_path = output_dir / f"{video_name}_integrated_debug.mp4"
@@ -320,7 +365,8 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
     
     writer.release()
     result_paths['debug'] = str(output_path)
-    print(f"✓ Saved: {output_path.name}")
+    print(f">>> Saved: {output_path.name}")
     
-    print(f"\n✓ Generated {len(result_paths)} integrated tracking videos")
+    print(f"\n>>> Generated {len(result_paths)} integrated tracking videos")
     return result_paths
+
