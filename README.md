@@ -211,16 +211,28 @@ bowling-cv/
     - Selection strategy (search zones, exclusion areas)
     - Trajectory view (ball path with fading trail)
     - Debug overlay (complete info panel)
+  
+  - ✅ **Stage F: Stop Condition & Trajectory Export**
+    - Percentage-based stop threshold (0.5% below top boundary)
+    - Early tracking termination when ball reaches pin area
+    - Saves ~35% processing time (tested: 226/346 frames)
+    - Linear interpolation beyond last detection using Kalman velocity
+    - Trajectory data export for post-processing:
+      - Original (perspective) coordinates
+      - Transformed (overhead) coordinates via homography
+      - Interpolated endpoints in both coordinate systems
+      - JSON format with complete metadata
+    - Enhanced visualizations:
+      - Stop threshold line (magenta)
+      - Interpolated trajectory (dashed orange)
+      - Trajectory plots on original and overhead views
 
 ### 🔄 In Progress (Phase 2)
-- **Ball Detection Refinement**
-  - Shadow handling improvements
-  - Multi-ball detection
-  - Hand vs. ball discrimination
-- **Trajectory Extraction**
-  - Ball position time series
-  - Velocity and acceleration analysis
-  - Path smoothing algorithms
+- **Trajectory Analysis & Physics**
+  - Velocity and acceleration curves
+  - Path curvature analysis
+  - Impact angle calculations
+  - Comparative analysis across multiple throws
   - ✅ Vertical lane boundary detection (left & right sides)
   - ✅ Top boundary detection (pin area) with MSAC line fitting
   - ✅ Master line computation using voting system
@@ -322,14 +334,22 @@ python -m src.ball_detection.main --video cropped_test3.mp4
 python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --skip-transform --skip-motion --skip-roi
 ```
 
-**Integrated Tracking Outputs (4 diagnostic videos):**
+**Integrated Tracking Outputs (4 diagnostic videos + trajectory data):**
 - `*_integrated_candidates.mp4` - Shows all validated candidates (cyan), selected candidate (yellow), ROI box (green in local mode), candidate counts
 - `*_integrated_selection.mp4` - Search strategy visualization:
   - **GLOBAL (initial)**: Red exclusion zone (upper 30%), green search zone
   - **GLOBAL (reactivation)**: Green search line above last position, orange last position marker
   - **LOCAL**: Green ROI box, red Kalman prediction crosshair
-- `*_integrated_trajectory.mp4` - Ball trajectory trail with fading effect, current position highlight
+- `*_integrated_trajectory.mp4` - Ball trajectory trail with fading effect, current position highlight, interpolated section (dashed)
 - `*_integrated_debug.mp4` - Complete overlay with transparent info panel showing mode, candidates, detection status
+- `*_trajectory_data.json` - **NEW**: Complete trajectory export for post-processing
+  - Original (perspective) coordinates: {index, x, y, interpolated}
+  - Transformed (overhead) coordinates: {index, x, y, interpolated}
+  - Interpolated endpoints: {original: {x, y}, transformed: {x, y}}
+  - Stop info: {stopped_at_frame, stop_threshold_y, top_boundary_y}
+  - Statistics: {total_points, extrapolated_endpoints}
+- `*_original_trajectory.png` - **NEW**: Trajectory plot on perspective view with stop threshold line
+- `*_overhead_trajectory.png` - **NEW**: Trajectory plot on overhead (transformed) view
 
 **Stage A-B Intermediate Outputs:**
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
