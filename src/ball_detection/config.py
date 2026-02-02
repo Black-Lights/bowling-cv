@@ -199,7 +199,7 @@ SAVE_FULL_BLOB_PIPELINE_VIDEO = True         # 2x3 grid showing all stages
 
 # Stop tracking when ball reaches pin area
 ENABLE_STOP_CONDITION = True                 # Enable automatic stop when near pins
-STOP_THRESHOLD_PCT = -0.03                   # Stop when Y ≤ (top_boundary + STOP_THRESHOLD_PCT * frame_height)
+STOP_THRESHOLD_PCT = -0.05                   # Stop when Y ≤ (top_boundary + STOP_THRESHOLD_PCT * frame_height)
                                              # Negative = stop ABOVE top boundary (toward frame top)
                                              # Example: If top=130, height=954, stop at Y≤111 (130 - 19)
 
