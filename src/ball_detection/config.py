@@ -67,7 +67,7 @@ USE_MOG2 = True  # Use MOG2 (Mixture of Gaussians) for background subtraction
 
 # MOG2 Parameters
 MOG2_HISTORY = 500  # Number of frames for background learning (higher = slower adaptation)
-MOG2_VAR_THRESHOLD = 16  # Threshold for squared Mahalanobis distance (lower = more sensitive)
+MOG2_VAR_THRESHOLD = 40  # Threshold for squared Mahalanobis distance (lower = more sensitive, increased to reduce noise)
 MOG2_DETECT_SHADOWS = True  # Detect shadows (they appear as grey pixels, value 127)
 
 # Shadow Removal
@@ -95,12 +95,12 @@ K_SCALE = 0.15  # Perspective scaling factor: B_t = max(B_min, k * y_ball)
 
 # Ball Size Constraints (for contour filtering)
 MIN_BALL_RADIUS = 5   # Minimum ball radius (pixels) - ball at 60ft (near pins)
-MAX_BALL_RADIUS = 50  # Maximum ball radius (pixels) - ball at foul line
+MAX_BALL_RADIUS = 150  # Maximum ball radius (pixels) - ball at foul line
 
 # Velocity Filtering (Global Search Mode)
 MIN_VELOCITY_Y = -2  # Minimum Y velocity (negative = toward pins, away from camera)
                      # Filters out bowler's body and lateral movements
-FOUL_LINE_PRIORITY_ZONE = 100  # Pixels from bottom boundary to prioritize detection
+FOUL_LINE_PRIORITY_ZONE = 200  # Pixels from bottom boundary to prioritize detection
                                # Focus on area near foul line for initial detection
 
 # Kalman Filter Parameters
@@ -131,6 +131,46 @@ SAVE_KALMAN_PREDICTION_VIDEO = True      # Kalman predictions vs actual detectio
 SAVE_ROI_MODE_COMPARISON_VIDEO = True    # Side-by-side global vs local
 SAVE_ROI_SCALING_DEMO_VIDEO = True       # Perspective scaling demonstration
 SAVE_FULL_ROI_PIPELINE_VIDEO = True      # Complete 2x3 grid pipeline view
+
+# ============================================================
+# STAGE D: BLOB ANALYSIS & FILTERING
+# ============================================================
+
+# ----- Area Filter (Perspective Awareness) -----
+# Manual thresholds (used if AUTO_CALIBRATE_AREA is False)
+AREA_MAX_AT_FOUL = 400  # Maximum ball area near foul line (pixels²) - increased for cropped videos
+AREA_MIN_AT_FOUL = 80   # Minimum ball area near foul line (pixels²) - increased for cropped videos
+AREA_MAX_AT_PINS = 50   # Maximum ball area at pins (pixels²) - increased proportionally
+AREA_MIN_AT_PINS = 10   # Minimum ball area at pins (pixels²) - increased proportionally
+
+# Auto-calibration (Hybrid approach - adapts to video zoom/crop)
+AUTO_CALIBRATE_AREA = True  # If True, detect ball in first frames and adapt thresholds
+CALIBRATION_FRAMES = 30     # Number of frames to use for auto-calibration
+CALIBRATION_MIN_CIRCULARITY = 0.7  # Minimum circularity to accept blob for calibration
+
+# ----- Circularity Filter -----
+CIRCULARITY_THRESHOLD = 0.65  # C = 4π·Area / Perimeter² (1.0 = perfect circle)
+                               # 0.65 accommodates motion blur while rejecting hands/arms
+
+# ----- Aspect Ratio Filter -----
+ASPECT_RATIO_MAX = 2.0  # Major axis / Minor axis (allows motion blur elongation)
+                        # Hands/arms are more elongated and will be rejected
+
+# ----- Color Verification (Optional) -----
+ENABLE_COLOR_FILTER = False  # Set to True if you know the ball color
+BALL_HSV_MIN = (100, 50, 50)   # Lower HSV bound (example: blue ball)
+BALL_HSV_MAX = (130, 255, 255) # Upper HSV bound (example: blue ball)
+COLOR_MATCH_THRESHOLD = 0.7    # Percentage of pixels that must match color range
+
+# Stage D Intermediate Videos (for debugging)
+SAVE_BLOB_ALL_CONTOURS_VIDEO = True          # All detected contours before filtering
+SAVE_BLOB_AREA_FILTER_VIDEO = True           # Color-coded area filter results
+SAVE_BLOB_CIRCULARITY_FILTER_VIDEO = True    # Circularity filter with values
+SAVE_BLOB_ASPECT_RATIO_FILTER_VIDEO = True   # Aspect ratio filter with ellipses
+SAVE_BLOB_COLOR_FILTER_VIDEO = True          # HSV color filter (if enabled)
+SAVE_BLOB_FINAL_FILTERED_VIDEO = True        # Only blobs passing all filters
+SAVE_BLOB_FILTER_COMPARISON_VIDEO = True     # Side-by-side raw vs filtered
+SAVE_FULL_BLOB_PIPELINE_VIDEO = True         # 2x3 grid showing all stages
 
 # ============================================
 # DEBUG & LOGGING

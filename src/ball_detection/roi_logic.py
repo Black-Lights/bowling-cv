@@ -225,6 +225,15 @@ def global_search(mask, config, foul_line_y, prev_positions=None, max_y_boundary
         if not candidates:
             return None
     
+    # Filter out candidates in upper part of frame (bowler area)
+    # Only consider detections in lower 70% of frame (where ball should be)
+    # This prevents tracking the bowler's head/body
+    min_y_threshold = foul_line_y * 0.3  # Upper 30% is bowler area
+    candidates = [c for c in candidates if c['center'][1] > min_y_threshold]
+    
+    if not candidates:
+        return None
+    
     # Score candidates
     scored = []
     priority_zone_start = foul_line_y - config.FOUL_LINE_PRIORITY_ZONE
@@ -236,7 +245,11 @@ def global_search(mask, config, foul_line_y, prev_positions=None, max_y_boundary
         # Priority 1: Near foul line (higher score = closer to foul line)
         if cy > priority_zone_start:
             proximity_score = (cy - priority_zone_start) / config.FOUL_LINE_PRIORITY_ZONE
-            score += proximity_score * 50  # Weight: 0-50 points
+            score += proximity_score * 100  # Weight: 0-100 points (increased from 50)
+        else:
+            # Penalize detections far from foul line
+            distance_penalty = (priority_zone_start - cy) / priority_zone_start
+            score -= distance_penalty * 50  # Penalty for being too far up
         
         # Priority 2: Negative Y velocity (if we have history)
         if prev_positions and len(prev_positions) >= 2:
