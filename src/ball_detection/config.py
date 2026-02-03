@@ -215,6 +215,39 @@ STOP_THRESHOLD_COLOR = (255, 0, 255)         # Magenta line for stop threshold
 INTERPOLATION_COLOR = (0, 165, 255)          # Orange for interpolated trajectory section
 
 # ============================================
+# STAGE G: POST-PROCESSING (TRAJECTORY CLEANING & RECONSTRUCTION)
+# ============================================
+
+# ----- Stage G1: Trajectory Processing -----
+# Moving median filter parameters
+MEDIAN_WINDOW = 5  # Window size for moving median filter (must be odd, removes spikes)
+
+# MAD outlier detection parameters
+MAD_THRESHOLD = 3.5  # Modified Z-score threshold (3.5 = conservative, 2.5 = aggressive)
+
+# Savitzky-Golay smoothing parameters
+SAVGOL_WINDOW = 45  # Window length for final smoothing (must be odd)
+SAVGOL_POLYORDER = 2  # Polynomial order (2 or 3 recommended)
+
+# ----- Stage G2: Trajectory Reconstruction -----
+# Template configuration
+TEMPLATE_PATH = os.path.join(PROJECT_ROOT, 'assets', 'Template_lane_1.png')
+BOUNDARY_Y = 135  # Y-coordinate of boundary line on template (where pins start)
+
+# Homography space dimensions (from perspective transformation)
+HOMOGRAPHY_WIDTH = 41.5  # Width in inches
+HOMOGRAPHY_HEIGHT = 720  # Height in inches
+
+# Resolution smoothing parameters (removes pixelation after scaling)
+RESOLUTION_SMOOTH_WINDOW = 15  # Window for Savitzky-Golay (removes scaling artifacts)
+RESOLUTION_SMOOTH_POLYORDER = 3  # Polynomial order (higher = smoother curves)
+
+# Post-processing output
+SAVE_PROCESSED_TRAJECTORY_CSV = True  # Save cleaned trajectory
+SAVE_RECONSTRUCTED_TRAJECTORY_CSV = True  # Save template-space trajectory
+SAVE_POST_PROCESSING_VISUALIZATIONS = False  # Save comparison plots (matplotlib)
+
+# ============================================
 # DEBUG & LOGGING
 # ============================================
 
