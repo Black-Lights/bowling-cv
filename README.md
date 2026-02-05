@@ -16,7 +16,7 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F Integrated)  
+**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F+G Integrated)  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
 **Phase 4: Spin/Rotation Analysis** - Planned  
 **Phase 5: Pin Detection** - Planned
@@ -236,6 +236,22 @@ bowling-cv/
       - Stop threshold line (magenta)
       - Interpolated trajectory with 5 predictions (dashed orange)
       - Trajectory plots on original and overhead views
+  
+  - ✅ **Stage G: Post-Processing (Trajectory Cleaning & Reconstruction)**
+    - **Stage G1: Trajectory Processing**
+      - Moving median filter (window=5) - removes spikes and noise
+      - MAD outlier detection (threshold=3.5) - statistical outlier removal
+      - Cubic interpolation - fills gaps from outlier removal
+      - Savitzky-Golay smoothing (window=45, poly=2) - final smoothing
+    - **Stage G2: Template Reconstruction**
+      - Boundary filtering (removes points outside valid lane area)
+      - Coordinate scaling from homography space to template space
+      - Resolution smoothing (window=15, poly=3) - removes pixelation artifacts
+    - **Output Files**:
+      - `trajectory_processed.csv` - cleaned trajectory in homography space
+      - `trajectory_reconstructed.csv` - final trajectory on lane template
+    - Fully integrated into main pipeline as Step 6
+    - Configurable via `--skip-postprocess` CLI flag
 
 ### 🔄 In Progress (Phase 2)
 - **Trajectory Analysis & Physics**
@@ -334,17 +350,20 @@ python main.py --video cropped_test3.mp4
 
 **Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
 
-### Phase 2: Ball Detection (Stages B+C+D+E Integrated)
+### Phase 2: Ball Detection (Stages B+C+D+E+F+G Integrated)
 
 ```bash
-# Run complete ball detection pipeline (all steps)
+# Run complete ball detection pipeline (all 6 steps)
 python -m src.ball_detection.main --video cropped_test3.mp4
 
 # Or skip specific steps if you already have preprocessed files
 python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --skip-transform --skip-motion --skip-roi
+
+# Skip post-processing if you only need raw trajectory
+python -m src.ball_detection.main --video cropped_test3.mp4 --skip-postprocess
 ```
 
-**Integrated Tracking Outputs (4 diagnostic videos + trajectory data):**
+**Integrated Tracking Outputs (4 diagnostic videos + trajectory data + post-processing):**
 - `*_integrated_candidates.mp4` - Shows all validated candidates (cyan), selected candidate (yellow), ROI box (green in local mode), candidate counts
 - `*_integrated_selection.mp4` - Search strategy visualization:
   - **GLOBAL (initial)**: Red exclusion zone (upper 30%), green search zone
@@ -362,6 +381,10 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --ski
   - Statistics: {total_points, extrapolated_endpoints}
 - `*_original_trajectory.png` - **NEW**: Trajectory plot on perspective view with stop threshold line
 - `*_overhead_trajectory.png` - **NEW**: Trajectory plot on overhead (transformed) view
+
+**Stage G Post-Processing Outputs:**
+- `trajectory_processed.csv` - Cleaned trajectory in homography space (median filter + outlier removal + smoothing)
+- `trajectory_reconstructed.csv` - Final trajectory scaled to lane template coordinates
 
 **Stage A-B Intermediate Outputs:**
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
