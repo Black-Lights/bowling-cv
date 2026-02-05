@@ -57,6 +57,7 @@ def main():
     parser.add_argument('--skip-motion', action='store_true', help='Skip Step 3 (motion detection)')
     parser.add_argument('--skip-roi', action='store_true', help='Skip Step 4 (ROI logic)')
     parser.add_argument('--skip-blob', action='store_true', help='Skip Step 5 (blob analysis)')
+    parser.add_argument('--skip-postprocess', action='store_true', help='Skip Step 6 (post-processing)')
     args = parser.parse_args()
     
     # Determine which videos to process
@@ -72,6 +73,7 @@ def main():
     print(f"# Step 3: Motion Detection (Background Subtraction)")
     print(f"# Step 4: ROI Logic (Kalman Filter Tracking)")
     print(f"# Step 5: Blob Analysis & Filtering")
+    print(f"# Step 6: Post-Processing (Trajectory Cleaning & Reconstruction)")
     print(f"# Processing {len(videos)} video(s)")
     print(f"{'#'*80}\n")
     
@@ -274,6 +276,38 @@ def main():
                     tracker, output_base_dir / 'ball_detection',
                     video_name, config
                 )
+            
+            # Step 6: Post-Processing (Stage G) - Trajectory Cleaning & Reconstruction
+            if not args.skip_postprocess:
+                print(f"\n{'='*60}")
+                print(f"Step 6: Post-Processing (Stage G) - Trajectory Cleaning")
+                print(f"{'='*60}")
+                
+                from ball_detection.post_processing import process_and_reconstruct
+                
+                trajectory_json = output_base_dir / 'ball_detection' / f'{video_name}_trajectory_data.json'
+                
+                if trajectory_json.exists():
+                    result = process_and_reconstruct(
+                        trajectory_json_path=str(trajectory_json),
+                        template_path=config.TEMPLATE_PATH,
+                        output_dir=str(output_base_dir / 'ball_detection'),
+                        save_outputs=config.SAVE_PROCESSED_TRAJECTORY_CSV,
+                        verbose=config.VERBOSE
+                    )
+                    
+                    print(f"\n>>> Post-processing complete for {video_file}")
+                    print(f"  Raw trajectory: {len(result['raw_trajectory'])} points")
+                    print(f"  Processed: {len(result['processed_trajectory'])} points")
+                    print(f"  Reconstructed (template): {len(result['reconstructed_trajectory'])} points")
+                    
+                    if config.SAVE_PROCESSED_TRAJECTORY_CSV:
+                        print(f"  Saved CSVs:")
+                        print(f"    - trajectory_processed.csv")
+                        print(f"    - trajectory_reconstructed.csv")
+                else:
+                    print(f"  Warning: Trajectory data not found: {trajectory_json}")
+                    print(f"  Skipping post-processing for this video")
                 
         except FileNotFoundError as e:
             print(f"\nERROR: Error processing {video_file}:")

@@ -16,9 +16,10 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Detection & Tracking**- ✅ **COMPLETE** (Stages B+C+D+E+F+G Integrated)  
-**Phase 3: Spin Analysis** - Planned  
-**Phase 4: Pin Detection** - Planned
+**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F+G Integrated)  
+**Phase 3: 3D Trajectory Reconstruction** - Planned  
+**Phase 4: Spin/Rotation Analysis** - Planned  
+**Phase 5: Pin Detection** - Planned
 
 ## Current Progress
 
@@ -81,6 +82,31 @@ python main.py --video cropped_test3.mp4
 - ✅ Professional class-based architecture (LaneDetector)
 - ✅ Automatic dependency resolution
 
+### Running Complete Ball Detection (Stages B-G Integrated)
+
+```bash
+# Run the complete Phase 2 pipeline (all 6 steps)
+python -m src.ball_detection.main --video cropped_test3.mp4
+
+# Process all configured videos
+python -m src.ball_detection.main
+```
+
+**Output:** 
+- 4 diagnostic videos (candidates, selection, trajectory, debug)
+- Trajectory data JSON (original + overhead coordinates)
+- Trajectory plots (original + overhead views)
+- Processed & reconstructed trajectory CSVs (Stage G)
+- Complete ball tracking from foul line to pins
+
+**Pipeline Steps:**
+1. ✅ Lane masking (4-side boundaries)
+2. ✅ Perspective transformation (overhead view)
+3. ✅ Motion detection (MOG2 background subtraction)
+4. ✅ ROI tracking (legacy visualization)
+5. ✅ Integrated tracking (Stages C+D+E+F: filter → select → track → stop)
+6. ✅ Post-processing (Stage G: cleaning + reconstruction)
+
 ---
 
 ## Project Structure
@@ -120,8 +146,8 @@ bowling-cv/
 │       ├── transform_video.py     # Perspective transformation to overhead view
 │       ├── motion_detection.py    # MOG2 background subtraction (Stage B)
 │       ├── roi_logic.py           # Kalman filter tracking (Stages C+E)
-│       ├── blob_analysis.py       # Geometric validation (Stage D)       ├── trajectory_plot.py     # Trajectory export and plotting (Stage F)
-       ├── post_processing.py     # Post-processing pipeline (Stage G)│       ├── integrated_visualization.py # 4 diagnostic visualization videos
+│       ├── blob_analysis.py       # Geometric validation (Stage D)
+│       ├── integrated_visualization.py # 4 diagnostic visualization videos
 │       └── roi_visualization.py   # Legacy visualization (pre-integration)
 │
 ├── output/                        # Generated outputs
@@ -226,10 +252,9 @@ bowling-cv/
     - Early tracking termination when ball reaches pin area
     - Saves ~35-45% processing time (tested: 141/254 frames on cropped_test3)
     - Trajectory data export for post-processing:
-      - Original (perspective) coordinates with frame numbers and radius
+      - Original (perspective) coordinates with frame numbers
       - Transformed (overhead) coordinates via homography
       - Frame-accurate timing (frame_number field for spin analysis)
-      - Radius data for spin rate calculations
       - 5 interpolated endpoints in both coordinate systems (NEW)
       - JSON format with complete metadata
     - Enhanced visualizations:
@@ -237,111 +262,44 @@ bowling-cv/
       - Interpolated trajectory with 5 predictions (dashed orange)
       - Trajectory plots on original and overhead views
   
-  - ✅ **Stage G: Post-Processing & Trajectory Cleaning**
-    - **TrajectoryProcessor**: Cleans x, y coordinates
-      - Moving median filter (window=5) removes spikes
-      - MAD outlier detection (Modified Z-score, threshold=3.5)
-      - Cubic interpolation fills gaps from outlier removal
-      - Savitzky-Golay smoothing (window=45, poly=2) for final smoothing
-    - **RadiusProcessor**: Cleans ball radius using perspective-aware model
-      - **Physical Model**: radius(frame) = a × exp(-b × frame) + c
-      - Models perspective effect (ball appears smaller as it moves away)
-      - RANSAC robust fitting (threshold=0.4) handles outliers
-      - Outlier removal: flags radius values >10px from fitted curve
-      - Rolling median smoothing (21-frame window)
-      - Critical for spin analysis (requires accurate radius for RPM)
-    - **TrajectoryReconstructor**: Template overlay for visualization
-      - Scales trajectory to template image dimensions
-      - Boundary filtering and resolution smoothing
+  - ✅ **Stage G: Post-Processing (Trajectory Cleaning & Reconstruction)**
+    - **Stage G1: Trajectory Processing**
+      - Moving median filter (window=5) - removes spikes and noise
+      - MAD outlier detection (threshold=3.5) - statistical outlier removal
+      - Cubic interpolation - fills gaps from outlier removal
+      - Savitzky-Golay smoothing (window=45, poly=2) - final smoothing
+    - **Stage G2: Template Reconstruction**
+      - Boundary filtering (removes points outside valid lane area)
+      - Coordinate scaling from homography space to template space
+      - Resolution smoothing (window=15, poly=3) - removes pixelation artifacts
+      - Float precision maintained throughout pipeline for smooth trajectories
     - **Output Files**:
-      - `trajectory_processed_original.csv` - Cleaned data in original (perspective) coordinates
-      - `trajectory_processed_overhead.csv` - Cleaned data in overhead (homography) coordinates with uniform scaling
-      - `trajectory_reconstructed.csv` - Scaled to template (visualization only)
-      - All files include: frame, x, y, radius
-    - **Validation Visualizations** (auto-generated PNG plots):
-      - `trajectory_processing_original.png` - Original coordinate cleaning (x/y time series + 2D path)
-      - `trajectory_processing_overhead.png` - Overhead coordinate cleaning (x/y time series + 2D path)
-      - `radius_processing_visualization.png` - Radius cleaning (raw vs fitted exponential decay + outliers)
-      - Shows before/after comparison for quality assurance
-      - Displays RANSAC inliers/outliers and exponential model fit
-    - Processes both coordinate systems independently
-    - Radius cleaning shared across both (measured once, applied to both)
-    - Ready for Phase 3 spin analysis integration
-    - **Usage**: `python visualize_postprocessing.py trajectory_data.json template.png`
+      - `trajectory_processed_original.csv` - cleaned trajectory in original (perspective) coordinates
+      - `trajectory_processed_overhead.csv` - cleaned trajectory in overhead (homography) coordinates
+      - `trajectory_reconstructed.csv` - final trajectory on lane template
+    - **Validation Visualizations**:
+      - `trajectory_processing_original.png` - Original coordinate cleaning plots
+      - `trajectory_processing_overhead.png` - Overhead coordinate cleaning plots
+      - `radius_processing_visualization.png` - Radius cleaning with RANSAC fit
+      - `trajectory_on_template.png` - Final trajectory overlaid on bowling lane template
+      - `trajectory_animation.mp4` - Animated video showing trajectory building frame-by-frame
+    - Fully integrated into main pipeline as Step 6
+    - Configurable via `--skip-postprocess` CLI flag and config.py parameters
 
-### 🔄 In Progress (Phase 2)
+### 🔄 In Progress (Phase 2 - Advanced Analysis)
 - **Trajectory Analysis & Physics**
-  - Velocity and acceleration curves
-  - Path curvature analysis
-  - Impact angle calculations
+  - Velocity and acceleration curves over time
+  - Path curvature analysis for hook detection
+  - Impact angle calculations at pin deck
+  - Ball speed measurements (mph/fps)
   - Comparative analysis across multiple throws
-  - ✅ Vertical lane boundary detection (left & right sides)
-  - ✅ Top boundary detection (pin area) with MSAC line fitting
-  - ✅ Master line computation using voting system
-  - ✅ Perspective-aware angle calculations
-  - ✅ Tracking stability analysis
-  - ✅ Multiple visualization modes
-  - ✅ HSV preprocessing with gap filling
-  - ✅ Robust MSAC (M-estimator SAmple Consensus) fitting
-  - ✅ Complete lane box (all 4 boundaries)
+  - Statistical trajectory metrics
 
-### 🔄 In Progress (Phase 2 - Ball Detection)
-- **Video Masking** ✅ COMPLETE
-  - Reuses Phase 1 lane boundaries
-  - 4-side masking (top, bottom, left, right)
-  - Two modes: video file or frame generator
-  - Memory-efficient frame processing
-  - Foul line area properly excluded (30px cutoff)
-- **2D Homography & Perspective Transformation** ✅ COMPLETE
-  - Direct Linear Transform (DLT) for homography calculation
-  - Perspective transformation to overhead view
-  - Uniform scaling (20 px/in) preserves circular shapes
-  - Auto-crop to remove black borders
-  - High-quality encoding (PNG frames + yuv444p)
-  - Real-world dimensions: 60 ft × 41.5 in bowling lane
-- **Motion Detection (Background Subtraction)** ✅ COMPLETE
-  - MOG2 (Mixture of Gaussians) background subtractor
-  - Shadow removal (threshold grey pixels at 127)
-  - Morphological opening for noise removal (3×3 ellipse kernel)
-  - Intermediate videos: foreground mask, shadow removed, denoised
-  - 2×2 comparison video for debugging
-- **ROI Logic & Tracking (Kalman Filter)** ✅ COMPLETE
-  - Dual-mode tracking: Global Search + Local Tracking
-  - OpenCV Kalman Filter (4-state: x, y, vx, vy)
-  - Perspective-aware dynamic ROI sizing: B_t = max(30px, 0.15 * y_ball)
-  - Global search: prioritizes foul line + negative Y velocity filtering
-  - Local tracking: searches within predicted ROI box
-  - 10-frame timeout before reverting to global search
-  - 6 intermediate videos: global search, local tracking, Kalman predictions, mode comparison, scaling demo, full pipeline
-  - **Confirmation Logic (Problem 2 Solution)**:
-    - Dual confirmation: 20 consecutive frames + 240px travel distance (~12 feet)
-    - Unconfirmed object lost → Full lane search (prevents false restriction if tracking hand)
-    - Confirmed ball lost → Restricted search (y < last_position - 50px buffer)
-    - Physics-informed: ball cannot move back toward camera
-    - Prevents re-detecting ball behind where it was lost
-    - Successfully tested: Frame 109 confirmation, Frame 139 restricted search
-- **Ball Filtering (Blob Analysis)** (Next - Stage D)
-  - Circularity filter (C > 0.65)
-  - Aspect ratio validation (< 2.0)
-  - Size constraints (MIN/MAX radius)
-  - Hand vs. ball discrimination
-- **Trajectory Extraction** (Upcoming)
-  - Ball position time series
-  - Velocity and acceleration analysis
-  - Path smoothing algorithms
-
-### Planned (Phase 3: Spin Analysis)
-- **Ball Rotation Analysis**
-  - Spin rate (RPM) calculation using frame_number and radius
-  - Rotation axis detection and tracking
-  - Spin direction analysis (hook, backup, straight)
-  - Requires radius data for accurate spin calculations
-
-### Planned (Phase 4: Pin Detection)
-- **Pin Toppling Detection**
-  - Pin count before/after impact
-  - Strike/spare/split classification
-  - Pin trajectory tracking
+### Planned (Phase 3+)
+- **3D Trajectory Reconstruction**
+- **Spin/Rotation Analysis and Axis Detection**
+- **Pin Detection and Topple Counting**
+- **Strike/Spare Classification**
 - **Comprehensive Visualization Dashboard**
 
 ---
@@ -373,17 +331,20 @@ python main.py --video cropped_test3.mp4
 
 **Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
 
-### Phase 2: Ball Detection (Stages B+C+D+E Integrated)
+### Phase 2: Ball Detection (Stages B+C+D+E+F+G Integrated)
 
 ```bash
-# Run complete ball detection pipeline (all steps)
+# Run complete ball detection pipeline (all 6 steps)
 python -m src.ball_detection.main --video cropped_test3.mp4
 
 # Or skip specific steps if you already have preprocessed files
 python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --skip-transform --skip-motion --skip-roi
+
+# Skip post-processing if you only need raw trajectory
+python -m src.ball_detection.main --video cropped_test3.mp4 --skip-postprocess
 ```
 
-**Integrated Tracking Outputs (4 diagnostic videos + trajectory data):**
+**Integrated Tracking Outputs (4 diagnostic videos + trajectory data + post-processing):**
 - `*_integrated_candidates.mp4` - Shows all validated candidates (cyan), selected candidate (yellow), ROI box (green in local mode), candidate counts
 - `*_integrated_selection.mp4` - Search strategy visualization:
   - **GLOBAL (initial)**: Red exclusion zone (upper 30%), green search zone
@@ -392,19 +353,19 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --ski
 - `*_integrated_trajectory.mp4` - Ball trajectory trail with fading effect, current position highlight, interpolated section (dashed)
 - `*_integrated_debug.mp4` - Complete overlay with transparent info panel showing mode, candidates, detection status
 - `*_trajectory_data.json` - **NEW**: Complete trajectory export for post-processing
-  - Original (perspective) coordinates: {index, frame_number, x, y, radius, interpolated}
-  - Transformed (overhead) coordinates: {index, frame_number, x, y, radius, interpolated}
+  - Original (perspective) coordinates: {index, frame_number, x, y, interpolated}
+  - Transformed (overhead) coordinates: {index, frame_number, x, y, interpolated}
   - `frame_number`: Actual video frame number (for timing/spin analysis)
   - `index`: Sequential trajectory point number (0, 1, 2...)
-  - `radius`: Ball radius in pixels (for spin analysis)
-  - Interpolated endpoints: {original: {x, y, radius}, transformed: {x, y, radius}}
+  - Interpolated endpoints: {original: {x, y}, transformed: {x, y}}
   - Stop info: {stopped_at_frame, stop_threshold_y, top_boundary_y}
   - Statistics: {total_points, extrapolated_endpoints}
-- `trajectory_processed_original.csv` - **Stage G Output**: Cleaned trajectory in original video coordinates (frame, x, y, radius)
-- `trajectory_processed_overhead.csv` - **Stage G Output**: Cleaned trajectory in overhead view with uniform scaling (frame, x, y, radius) - **Use for spin analysis**
-- `trajectory_reconstructed.csv` - **Stage G Output**: Scaled to template dimensions (visualization only)
 - `*_original_trajectory.png` - **NEW**: Trajectory plot on perspective view with stop threshold line
 - `*_overhead_trajectory.png` - **NEW**: Trajectory plot on overhead (transformed) view
+
+**Stage G Post-Processing Outputs:**
+- `trajectory_processed.csv` - Cleaned trajectory in homography space (median filter + outlier removal + smoothing)
+- `trajectory_reconstructed.csv` - Final trajectory scaled to lane template coordinates
 
 **Stage A-B Intermediate Outputs:**
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
@@ -613,21 +574,57 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 
 ## Development Roadmap
 
-### Phase 1: Lane Detection (In Progress)
+### Phase 1: Lane Detection ✅ COMPLETE
 - [x] Horizontal foul line detection (bottom boundary)
 - [x] Vertical boundary detection (left & right sides)
 - [x] Master line voting system
 - [x] Perspective correction
 - [x] Tracking analysis
-- [ ] **Top boundary detection** ← Next task
+- [x] **Top boundary detection with MSAC fitting**
+- [x] Frame caching system
+- [x] Small patch removal
+- [x] Professional class-based architecture (LaneDetector)
+- [x] 6 intermediate visualization modes
 
-### Phase 2: Ball Tracking (Planned)
-- [ ] Ball detection algorithm
-- [ ] Multi-frame tracking
-- [ ] Trajectory extraction
-- [ ] Position smoothing
+### Phase 2: Ball Detection & Tracking ✅ COMPLETE
+- [x] **Stage A: Video Preprocessing**
+  - [x] 4-side lane masking using Phase 1 boundaries
+  - [x] 2D homography calculation (DLT)
+  - [x] Perspective transformation to overhead view
+  - [x] High-quality encoding (PNG + yuv444p)
+- [x] **Stage B: Motion Detection**
+  - [x] MOG2 background subtraction
+  - [x] Shadow removal and separation
+  - [x] Morphological noise removal
+- [x] **Stage D: Blob Analysis**
+  - [x] Geometric validation (circularity, aspect ratio)
+  - [x] Auto-calibration system
+- [x] **Stage C+E: Tracking-by-Detection**
+  - [x] Kalman filter tracking
+  - [x] Dual-mode search (global + local)
+  - [x] Confirmation logic
+  - [x] Reactivation search
+- [x] **Stage F: Stop Condition & Export**
+  - [x] Configurable stop threshold
+  - [x] 5 Kalman predictions for extrapolation
+  - [x] Trajectory JSON export (original + overhead)
+  - [x] Trajectory plots
+- [x] **Stage G: Post-Processing**
+  - [x] Trajectory cleaning (median filter, outlier detection)
+  - [x] Template reconstruction with scaling
+  - [x] CSV export for analysis
+- [x] **Integrated Visualization**
+  - [x] 4 diagnostic videos (candidates, selection, trajectory, debug)
 
-### Phase 3: 3D Reconstruction (Planned)
+### Phase 3: Advanced Trajectory Analysis (In Progress)
+- [ ] Velocity and acceleration curves
+- [ ] Path curvature analysis for hook detection
+- [ ] Impact angle calculations
+- [ ] Ball speed measurements (mph/fps)
+- [ ] Multi-throw comparative analysis
+- [ ] Statistical trajectory metrics
+
+### Phase 4: 3D Reconstruction (Planned)
 - [ ] Camera calibration
 - [ ] Perspective transformation
 - [ ] 3D trajectory mapping
@@ -703,10 +700,46 @@ For questions or collaboration inquiries:
 
 ---
 
-## Note
+## Project Status & Updates
 
-This is a work in progress. **Phase 1 (Lane Detection)** is currently being completed - bottom foul line and side boundaries are working, with top boundary detection as the next development task. The implementation is being developed iteratively, with each phase building upon the previous one.
+**Phase 1 (Lane Detection)** - ✅ **COMPLETE** (February 2026)
+- All 4 boundaries successfully detected (top, bottom, left, right)
+- Professional class-based architecture (LaneDetector)
+- Frame caching for performance optimization
+- MSAC-based top boundary detection
 
-**Current Focus**: Completing lane detection by adding top boundary detection to fully define the bowling area.
+**Phase 2 (Ball Detection & Tracking)** - ✅ **COMPLETE** (February 2026)
+- Complete pipeline: Stages A through G integrated
+- Tracking-by-Detection architecture (filter → select → track)
+- Stop condition with Kalman predictions
+- Post-processing with trajectory cleaning and reconstruction
+- 4 diagnostic visualization videos
+- JSON and CSV trajectory export
 
-**Last Updated**: January 2026
+**Current Focus**: Advanced trajectory analysis (velocity curves, hook detection, impact angles)
+
+**Next Phase**: 3D trajectory reconstruction and spin/rotation analysis
+
+**Last Updated**: February 5, 2026
+
+---
+
+## Recent Achievements
+
+### Stage G Post-Processing (February 5, 2026)
+- Integrated trajectory cleaning pipeline
+- MAD outlier detection with Modified Z-score
+- Template reconstruction with coordinate scaling
+- CSV export for external analysis tools
+
+### Complete Phase 2 Pipeline (February 2026)
+- Tracking-by-Detection architecture implemented
+- All 7 stages integrated (A through G)
+- Tested on multiple videos with excellent results
+- Zero outliers detected in test6 (indicates robust tracking)
+
+### Bug Fixes & Improvements
+- Fixed reactivation search direction (critical fix)
+- Implemented shadow separation via erosion
+- Strengthened geometric filters
+- Prevented Kalman drift with quick fallback
