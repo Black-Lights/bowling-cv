@@ -31,7 +31,6 @@ venv.bak/
 files_lat/
 
 # Project tracking
-.project_tracking.md
 .dev_notes.md
 
 # IDE
@@ -66,6 +65,10 @@ assets/input/*.mov
 # Temporary files
 *.tmp
 temp/
+
+# Development convenience scripts (for local testing)
+run_phase1.py
+run_postprocessing.py
 
 # OS
 Thumbs.db

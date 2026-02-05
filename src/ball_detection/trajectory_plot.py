@@ -24,7 +24,7 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
     
     # Prepare original trajectory points
     original_points = []
-    for i, (cx, cy, frame_idx) in enumerate(tracker.trajectory):
+    for i, (cx, cy, frame_idx, radius) in enumerate(tracker.trajectory):
         is_interpolated = False
         if tracker.interpolated_points:
             # Check if this point is interpolated
@@ -38,6 +38,7 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
             'frame_number': int(frame_idx),
             'x': float(cx),
             'y': float(cy),
+            'radius': float(radius),
             'interpolated': is_interpolated
         })
     
@@ -56,12 +57,12 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
         H = np.array(homography_data['homography_matrix'], dtype=np.float32)
         
         # Transform all trajectory points
-        trajectory_points = np.array([[cx, cy] for cx, cy, _ in tracker.trajectory], dtype=np.float32)
+        trajectory_points = np.array([[cx, cy] for cx, cy, _, _ in tracker.trajectory], dtype=np.float32)
         if len(trajectory_points) > 0:
             transformed = cv2.perspectiveTransform(trajectory_points.reshape(-1, 1, 2), H)
             transformed = transformed.reshape(-1, 2)
             
-            for i, (cx, cy, frame_idx) in enumerate(tracker.trajectory):
+            for i, (cx, cy, frame_idx, radius) in enumerate(tracker.trajectory):
                 is_interpolated = False
                 
                 if tracker.interpolated_points:
@@ -75,6 +76,7 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
                     'frame_number': int(frame_idx),
                     'x': float(transformed[i][0]),
                     'y': float(transformed[i][1]),
+                    'radius': float(radius),
                     'interpolated': is_interpolated
                 })
     
@@ -93,7 +95,7 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
             'transformed': transformed_points if transformed_points else None
         },
         'interpolated_endpoints': {
-            'original': [{'x': float(x), 'y': float(y)} for x, y in tracker.interpolated_points] if tracker.interpolated_points else [],
+            'original': [{'x': float(x), 'y': float(y), 'radius': float(r)} for x, y, r in tracker.interpolated_points] if tracker.interpolated_points else [],
             'transformed': []
         },
         'statistics': {
@@ -110,12 +112,14 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
             homography_data = json.load(f)
         H = np.array(homography_data['homography_matrix'], dtype=np.float32)
         
-        interp_points = np.array(tracker.interpolated_points, dtype=np.float32)
+        # Extract x, y from (x, y, radius) tuples
+        interp_points = np.array([[x, y] for x, y, _ in tracker.interpolated_points], dtype=np.float32)
         transformed_interp = cv2.perspectiveTransform(interp_points.reshape(-1, 1, 2), H)
         transformed_interp = transformed_interp.reshape(-1, 2)
         
         trajectory_data['interpolated_endpoints']['transformed'] = [
-            {'x': float(x), 'y': float(y)} for x, y in transformed_interp
+            {'x': float(x), 'y': float(y), 'radius': float(tracker.interpolated_points[i][2])} 
+            for i, (x, y) in enumerate(transformed_interp)
         ]
     
     # Save to JSON
@@ -195,8 +199,8 @@ def plot_trajectory_on_overhead(tracker, output_dir, video_name, config):
         print(f"  Warning: No trajectory points to plot")
         return
     
-    # Convert trajectory to numpy array (extract x, y only)
-    trajectory_array = np.array([[x, y] for x, y, _ in tracker.trajectory], dtype=np.float32)
+    # Convert trajectory to numpy array (extract x, y only from 4-tuple)
+    trajectory_array = np.array([[x, y] for x, y, _, _ in tracker.trajectory], dtype=np.float32)
     
     # Apply homography transformation to all points
     # cv2.perspectiveTransform expects shape (N, 1, 2)
@@ -224,7 +228,9 @@ def plot_trajectory_on_overhead(tracker, output_dir, video_name, config):
     
     # Transform and draw interpolated points (if any)
     if tracker.interpolated_points:
-        interp_array = np.array(tracker.interpolated_points, dtype=np.float32).reshape(-1, 1, 2)
+        # Extract only x,y from 3-tuples (x, y, frame_idx)
+        interp_xy = [[pt[0], pt[1]] for pt in tracker.interpolated_points]
+        interp_array = np.array(interp_xy, dtype=np.float32).reshape(-1, 1, 2)
         transformed_interp = cv2.perspectiveTransform(interp_array, H).reshape(-1, 2)
         
         # Dashed line from last real to interpolated

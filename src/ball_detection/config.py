@@ -239,13 +239,27 @@ HOMOGRAPHY_WIDTH = 41.5  # Width in inches
 HOMOGRAPHY_HEIGHT = 720  # Height in inches
 
 # Resolution smoothing parameters (removes pixelation after scaling)
-RESOLUTION_SMOOTH_WINDOW = 15  # Window for Savitzky-Golay (removes scaling artifacts)
-RESOLUTION_SMOOTH_POLYORDER = 3  # Polynomial order (higher = smoother curves)
+RESOLUTION_SMOOTH_WINDOW = 30  # Window for Savitzky-Golay (removes scaling artifacts)
+RESOLUTION_SMOOTH_POLYORDER = 2  # Polynomial order (higher = smoother curves)
 
 # Post-processing output
 SAVE_PROCESSED_TRAJECTORY_CSV = True  # Save cleaned trajectory
 SAVE_RECONSTRUCTED_TRAJECTORY_CSV = True  # Save template-space trajectory
-SAVE_POST_PROCESSING_VISUALIZATIONS = False  # Save comparison plots (matplotlib)
+SAVE_POST_PROCESSING_VISUALIZATIONS = True  # Enable all visualization plots
+
+# Individual visualization flags
+SAVE_TRAJECTORY_PROCESSING_ORIGINAL_PLOT = True  # Original coordinates processing plot
+SAVE_TRAJECTORY_PROCESSING_OVERHEAD_PLOT = True  # Overhead coordinates processing plot
+SAVE_RADIUS_PROCESSING_PLOT = True  # Radius model fitting plot
+SAVE_TRAJECTORY_ON_TEMPLATE_PLOT = True  # Static trajectory overlay on template
+SAVE_TRAJECTORY_ANIMATION_VIDEO = True  # Animated video showing trajectory frame-by-frame
+
+# Video animation parameters
+ANIMATION_FPS = 30  # Frames per second for trajectory animation video
+ANIMATION_POINT_SIZE = 40  # Size of current ball marker
+ANIMATION_LINE_WIDTH = 3  # Width of trajectory line
+ANIMATION_TRAIL_LENGTH = 0  # Unused (trajectory always grows from start)
+ANIMATION_FRAME_REPEAT = 3  # Repeat each frame N times to slow down the animation
 
 # ============================================
 # DEBUG & LOGGING

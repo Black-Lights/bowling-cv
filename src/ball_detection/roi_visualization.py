@@ -77,7 +77,7 @@ def draw_trajectory(frame, trajectory, color=(0, 255, 0), max_points=30):
     
     points = trajectory[-max_points:]
     for i in range(1, len(points)):
-        # Extract x, y from (x, y, frame_idx) tuple
+        # Extract x, y from (x, y, frame_idx, radius) tuple
         pt1 = (int(points[i-1][0]), int(points[i-1][1]))
         pt2 = (int(points[i][0]), int(points[i][1]))
         

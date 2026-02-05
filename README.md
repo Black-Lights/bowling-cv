@@ -16,10 +16,9 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F Integrated)  
-**Phase 3: 3D Trajectory Reconstruction** - Planned  
-**Phase 4: Spin/Rotation Analysis** - Planned  
-**Phase 5: Pin Detection** - Planned
+**Phase 2: Ball Detection & Tracking**- ✅ **COMPLETE** (Stages B+C+D+E+F+G Integrated)  
+**Phase 3: Spin Analysis** - Planned  
+**Phase 4: Pin Detection** - Planned
 
 ## Current Progress
 
@@ -121,8 +120,8 @@ bowling-cv/
 │       ├── transform_video.py     # Perspective transformation to overhead view
 │       ├── motion_detection.py    # MOG2 background subtraction (Stage B)
 │       ├── roi_logic.py           # Kalman filter tracking (Stages C+E)
-│       ├── blob_analysis.py       # Geometric validation (Stage D)
-│       ├── integrated_visualization.py # 4 diagnostic visualization videos
+│       ├── blob_analysis.py       # Geometric validation (Stage D)       ├── trajectory_plot.py     # Trajectory export and plotting (Stage F)
+       ├── post_processing.py     # Post-processing pipeline (Stage G)│       ├── integrated_visualization.py # 4 diagnostic visualization videos
 │       └── roi_visualization.py   # Legacy visualization (pre-integration)
 │
 ├── output/                        # Generated outputs
@@ -227,15 +226,48 @@ bowling-cv/
     - Early tracking termination when ball reaches pin area
     - Saves ~35-45% processing time (tested: 141/254 frames on cropped_test3)
     - Trajectory data export for post-processing:
-      - Original (perspective) coordinates with frame numbers
+      - Original (perspective) coordinates with frame numbers and radius
       - Transformed (overhead) coordinates via homography
       - Frame-accurate timing (frame_number field for spin analysis)
+      - Radius data for spin rate calculations
       - 5 interpolated endpoints in both coordinate systems (NEW)
       - JSON format with complete metadata
     - Enhanced visualizations:
       - Stop threshold line (magenta)
       - Interpolated trajectory with 5 predictions (dashed orange)
       - Trajectory plots on original and overhead views
+  
+  - ✅ **Stage G: Post-Processing & Trajectory Cleaning**
+    - **TrajectoryProcessor**: Cleans x, y coordinates
+      - Moving median filter (window=5) removes spikes
+      - MAD outlier detection (Modified Z-score, threshold=3.5)
+      - Cubic interpolation fills gaps from outlier removal
+      - Savitzky-Golay smoothing (window=45, poly=2) for final smoothing
+    - **RadiusProcessor**: Cleans ball radius using perspective-aware model
+      - **Physical Model**: radius(frame) = a × exp(-b × frame) + c
+      - Models perspective effect (ball appears smaller as it moves away)
+      - RANSAC robust fitting (threshold=0.4) handles outliers
+      - Outlier removal: flags radius values >10px from fitted curve
+      - Rolling median smoothing (21-frame window)
+      - Critical for spin analysis (requires accurate radius for RPM)
+    - **TrajectoryReconstructor**: Template overlay for visualization
+      - Scales trajectory to template image dimensions
+      - Boundary filtering and resolution smoothing
+    - **Output Files**:
+      - `trajectory_processed_original.csv` - Cleaned data in original (perspective) coordinates
+      - `trajectory_processed_overhead.csv` - Cleaned data in overhead (homography) coordinates with uniform scaling
+      - `trajectory_reconstructed.csv` - Scaled to template (visualization only)
+      - All files include: frame, x, y, radius
+    - **Validation Visualizations** (auto-generated PNG plots):
+      - `trajectory_processing_original.png` - Original coordinate cleaning (x/y time series + 2D path)
+      - `trajectory_processing_overhead.png` - Overhead coordinate cleaning (x/y time series + 2D path)
+      - `radius_processing_visualization.png` - Radius cleaning (raw vs fitted exponential decay + outliers)
+      - Shows before/after comparison for quality assurance
+      - Displays RANSAC inliers/outliers and exponential model fit
+    - Processes both coordinate systems independently
+    - Radius cleaning shared across both (measured once, applied to both)
+    - Ready for Phase 3 spin analysis integration
+    - **Usage**: `python visualize_postprocessing.py trajectory_data.json template.png`
 
 ### 🔄 In Progress (Phase 2)
 - **Trajectory Analysis & Physics**
@@ -298,11 +330,18 @@ bowling-cv/
   - Velocity and acceleration analysis
   - Path smoothing algorithms
 
-### Planned (Phase 3+)
-- **3D Trajectory Reconstruction**
-- **Spin/Rotation Analysis and Axis Detection**
-- **Pin Detection and Topple Counting**
-- **Strike/Spare Classification**
+### Planned (Phase 3: Spin Analysis)
+- **Ball Rotation Analysis**
+  - Spin rate (RPM) calculation using frame_number and radius
+  - Rotation axis detection and tracking
+  - Spin direction analysis (hook, backup, straight)
+  - Requires radius data for accurate spin calculations
+
+### Planned (Phase 4: Pin Detection)
+- **Pin Toppling Detection**
+  - Pin count before/after impact
+  - Strike/spare/split classification
+  - Pin trajectory tracking
 - **Comprehensive Visualization Dashboard**
 
 ---
@@ -353,13 +392,17 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --ski
 - `*_integrated_trajectory.mp4` - Ball trajectory trail with fading effect, current position highlight, interpolated section (dashed)
 - `*_integrated_debug.mp4` - Complete overlay with transparent info panel showing mode, candidates, detection status
 - `*_trajectory_data.json` - **NEW**: Complete trajectory export for post-processing
-  - Original (perspective) coordinates: {index, frame_number, x, y, interpolated}
-  - Transformed (overhead) coordinates: {index, frame_number, x, y, interpolated}
+  - Original (perspective) coordinates: {index, frame_number, x, y, radius, interpolated}
+  - Transformed (overhead) coordinates: {index, frame_number, x, y, radius, interpolated}
   - `frame_number`: Actual video frame number (for timing/spin analysis)
   - `index`: Sequential trajectory point number (0, 1, 2...)
-  - Interpolated endpoints: {original: {x, y}, transformed: {x, y}}
+  - `radius`: Ball radius in pixels (for spin analysis)
+  - Interpolated endpoints: {original: {x, y, radius}, transformed: {x, y, radius}}
   - Stop info: {stopped_at_frame, stop_threshold_y, top_boundary_y}
   - Statistics: {total_points, extrapolated_endpoints}
+- `trajectory_processed_original.csv` - **Stage G Output**: Cleaned trajectory in original video coordinates (frame, x, y, radius)
+- `trajectory_processed_overhead.csv` - **Stage G Output**: Cleaned trajectory in overhead view with uniform scaling (frame, x, y, radius) - **Use for spin analysis**
+- `trajectory_reconstructed.csv` - **Stage G Output**: Scaled to template dimensions (visualization only)
 - `*_original_trajectory.png` - **NEW**: Trajectory plot on perspective view with stop threshold line
 - `*_overhead_trajectory.png` - **NEW**: Trajectory plot on overhead (transformed) view
 
