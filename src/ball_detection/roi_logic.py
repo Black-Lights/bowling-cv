@@ -364,7 +364,7 @@ class BallTracker:
         # State management
         self.tracking_active = False
         self.lost_frames = 0
-        self.trajectory = []  # List of (x, y) positions
+        self.trajectory = []  # List of (x, y, frame_idx) tuples
         
         # NEW: Global search type tracking
         self.search_type = 'initial'  # 'initial' or 'reactivation'
@@ -697,7 +697,7 @@ class BallTracker:
                     print(f"  Frame {frame_idx}: Ball detected! Activating local tracking mode")
             
             # Update trajectory and state
-            self.trajectory.append((cx, cy))
+            self.trajectory.append((cx, cy, frame_idx))
             self.recent_detections.append((cx, cy))
             self.lost_frames = 0
             self.last_known_y = cy  # Update last known position

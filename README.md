@@ -227,8 +227,9 @@ bowling-cv/
     - Early tracking termination when ball reaches pin area
     - Saves ~35-45% processing time (tested: 141/254 frames on cropped_test3)
     - Trajectory data export for post-processing:
-      - Original (perspective) coordinates
+      - Original (perspective) coordinates with frame numbers
       - Transformed (overhead) coordinates via homography
+      - Frame-accurate timing (frame_number field for spin analysis)
       - 5 interpolated endpoints in both coordinate systems (NEW)
       - JSON format with complete metadata
     - Enhanced visualizations:
@@ -352,8 +353,10 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --ski
 - `*_integrated_trajectory.mp4` - Ball trajectory trail with fading effect, current position highlight, interpolated section (dashed)
 - `*_integrated_debug.mp4` - Complete overlay with transparent info panel showing mode, candidates, detection status
 - `*_trajectory_data.json` - **NEW**: Complete trajectory export for post-processing
-  - Original (perspective) coordinates: {index, x, y, interpolated}
-  - Transformed (overhead) coordinates: {index, x, y, interpolated}
+  - Original (perspective) coordinates: {index, frame_number, x, y, interpolated}
+  - Transformed (overhead) coordinates: {index, frame_number, x, y, interpolated}
+  - `frame_number`: Actual video frame number (for timing/spin analysis)
+  - `index`: Sequential trajectory point number (0, 1, 2...)
   - Interpolated endpoints: {original: {x, y}, transformed: {x, y}}
   - Stop info: {stopped_at_frame, stop_threshold_y, top_boundary_y}
   - Statistics: {total_points, extrapolated_endpoints}

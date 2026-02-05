@@ -432,7 +432,7 @@ def process_and_reconstruct(
     transformed_points = trajectory_data['trajectory_points']['transformed']
     raw_df = pd.DataFrame([
         {
-            'frame': point['index'],
+            'frame': point['frame_number'],
             'x': point['x'],
             'y': point['y']
         }

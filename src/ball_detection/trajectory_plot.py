@@ -24,7 +24,7 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
     
     # Prepare original trajectory points
     original_points = []
-    for i, (cx, cy) in enumerate(tracker.trajectory):
+    for i, (cx, cy, frame_idx) in enumerate(tracker.trajectory):
         is_interpolated = False
         if tracker.interpolated_points:
             # Check if this point is interpolated
@@ -35,6 +35,7 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
         
         original_points.append({
             'index': i,
+            'frame_number': int(frame_idx),
             'x': float(cx),
             'y': float(cy),
             'interpolated': is_interpolated
@@ -55,12 +56,12 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
         H = np.array(homography_data['homography_matrix'], dtype=np.float32)
         
         # Transform all trajectory points
-        trajectory_points = np.array([[cx, cy] for cx, cy in tracker.trajectory], dtype=np.float32)
+        trajectory_points = np.array([[cx, cy] for cx, cy, _ in tracker.trajectory], dtype=np.float32)
         if len(trajectory_points) > 0:
             transformed = cv2.perspectiveTransform(trajectory_points.reshape(-1, 1, 2), H)
             transformed = transformed.reshape(-1, 2)
             
-            for i, (cx, cy) in enumerate(tracker.trajectory):
+            for i, (cx, cy, frame_idx) in enumerate(tracker.trajectory):
                 is_interpolated = False
                 
                 if tracker.interpolated_points:
@@ -71,6 +72,7 @@ def save_trajectory_points(tracker, output_dir, video_name, config):
                 
                 transformed_points.append({
                     'index': i,
+                    'frame_number': int(frame_idx),
                     'x': float(transformed[i][0]),
                     'y': float(transformed[i][1]),
                     'interpolated': is_interpolated
@@ -193,8 +195,8 @@ def plot_trajectory_on_overhead(tracker, output_dir, video_name, config):
         print(f"  Warning: No trajectory points to plot")
         return
     
-    # Convert trajectory to numpy array
-    trajectory_array = np.array(tracker.trajectory, dtype=np.float32)
+    # Convert trajectory to numpy array (extract x, y only)
+    trajectory_array = np.array([[x, y] for x, y, _ in tracker.trajectory], dtype=np.float32)
     
     # Apply homography transformation to all points
     # cv2.perspectiveTransform expects shape (N, 1, 2)
@@ -296,26 +298,26 @@ def plot_trajectory_on_original(tracker, frames, tracking_results, output_dir, v
     # Draw trajectory (solid orange line)
     if len(tracker.trajectory) > 1:
         for i in range(1, len(tracker.trajectory)):
-            pt1 = tracker.trajectory[i-1]
-            pt2 = tracker.trajectory[i]
+            pt1 = (int(tracker.trajectory[i-1][0]), int(tracker.trajectory[i-1][1]))
+            pt2 = (int(tracker.trajectory[i][0]), int(tracker.trajectory[i][1]))
             cv2.line(vis, pt1, pt2, (0, 165, 255), 3)  # Orange
     
     # Mark start point (green)
     if len(tracker.trajectory) > 0:
-        start_pt = tracker.trajectory[0]
+        start_pt = (int(tracker.trajectory[0][0]), int(tracker.trajectory[0][1]))
         cv2.circle(vis, start_pt, 10, (0, 255, 0), -1)
         cv2.putText(vis, "START", (start_pt[0] + 15, start_pt[1]),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
         
         # Mark end point (yellow)
-        end_pt = tracker.trajectory[-1]
+        end_pt = (int(tracker.trajectory[-1][0]), int(tracker.trajectory[-1][1]))
         cv2.circle(vis, end_pt, 10, (0, 255, 255), -1)
         cv2.putText(vis, "END", (end_pt[0] + 15, end_pt[1]),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
     
     # Draw interpolated points (dashed line)
     if tracker.interpolated_points:
-        last_real = tracker.trajectory[-1]
+        last_real = (tracker.trajectory[-1][0], tracker.trajectory[-1][1])
         for interp_pt in tracker.interpolated_points:
             # Draw dashes
             num_dashes = 15
@@ -329,8 +331,9 @@ def plot_trajectory_on_original(tracker, frames, tracking_results, output_dir, v
                 cv2.line(vis, (x1, y1), (x2, y2), config.INTERPOLATION_COLOR, 3)
             
             # Mark interpolated endpoint
-            cv2.circle(vis, interp_pt, 8, config.INTERPOLATION_COLOR, -1)
-            cv2.putText(vis, "EXTRAPOLATED", (interp_pt[0] + 15, interp_pt[1]),
+            interp_pt_int = (int(interp_pt[0]), int(interp_pt[1]))
+            cv2.circle(vis, interp_pt_int, 8, config.INTERPOLATION_COLOR, -1)
+            cv2.putText(vis, "EXTRAPOLATED", (interp_pt_int[0] + 15, interp_pt_int[1]),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, config.INTERPOLATION_COLOR, 2)
     
     # Draw stop threshold line (if available)
