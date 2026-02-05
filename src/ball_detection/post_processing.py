@@ -122,21 +122,35 @@ class TrajectoryProcessor:
     def process_trajectory(
         self,
         df: pd.DataFrame,
-        verbose: bool = True
-    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        verbose: bool = True,
+        return_intermediate: bool = False
+    ) -> Tuple[pd.DataFrame, pd.DataFrame] | Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
         """
         Complete trajectory processing pipeline.
         
         Args:
             df: DataFrame with 'frame', 'x', 'y' columns
             verbose: Print processing information
+            return_intermediate: If True, return intermediate processing steps for visualization
         
         Returns:
-            Tuple of (cleaned_df, final_df) where:
-            - cleaned_df: Data after outlier removal (before interpolation)
-            - final_df: Final processed and smoothed trajectory
+            If return_intermediate=False:
+                Tuple of (cleaned_df, final_df) where:
+                - cleaned_df: Data after outlier removal (before interpolation)
+                - final_df: Final processed and smoothed trajectory
+            
+            If return_intermediate=True:
+                Tuple of (cleaned_df, final_df, intermediate_dict) where intermediate_dict contains:
+                - 'raw': Original data
+                - 'after_median': After median filter applied
+                - 'outlier_mask': Boolean mask of detected outliers
+                - 'after_interpolation': After interpolation, before Savitzky-Golay
         """
+        intermediate = {} if return_intermediate else None
         result_df = df.copy()
+        
+        if return_intermediate:
+            intermediate['raw'] = df.copy()
         
         if verbose:
             print(f"  Original points: {len(result_df)}")
@@ -147,6 +161,9 @@ class TrajectoryProcessor:
         if verbose:
             print(f"  ✓ Applied moving median filter (window={self.median_window})")
         
+        if return_intermediate:
+            intermediate['after_median'] = result_df.copy()
+        
         # Step 2: MAD outlier detection
         outliers_x = self.modified_zscore_mad(result_df['x'].values, self.mad_threshold)
         outliers_y = self.modified_zscore_mad(result_df['y'].values, self.mad_threshold)
@@ -154,6 +171,9 @@ class TrajectoryProcessor:
         num_outliers = np.sum(outliers)
         if verbose:
             print(f"  ✓ Detected outliers: {num_outliers} ({100*num_outliers/len(result_df):.2f}%)")
+        
+        if return_intermediate:
+            intermediate['outlier_mask'] = outliers
         
         # Step 3: Remove outliers
         result_df.loc[outliers, 'x'] = np.nan
@@ -171,6 +191,9 @@ class TrajectoryProcessor:
             result_df['y'] = result_df['y'].interpolate(method='linear', limit_direction='both').ffill().bfill()
             if verbose:
                 print(f"  ✓ Interpolated missing values (linear - cubic failed)")
+        
+        if return_intermediate:
+            intermediate['after_interpolation'] = result_df.copy()
         
         # Step 5: Savitzky-Golay smoothing
         result_df['x'] = savgol_filter(
@@ -190,6 +213,8 @@ class TrajectoryProcessor:
         result_df['x'] = result_df['x'].round().astype(int)
         result_df['y'] = result_df['y'].round().astype(int)
         
+        if return_intermediate:
+            return cleaned_df, result_df, intermediate
         return cleaned_df, result_df
 
 
@@ -659,14 +684,39 @@ def process_and_reconstruct(
         print("\n--- Stage 1a: Original Trajectory Processing ---")
     
     processor_original = TrajectoryProcessor(**(processor_params or {}))
-    cleaned_df_original, processed_df_original = processor_original.process_trajectory(raw_df_original, verbose=verbose)
+    
+    # Check if we need intermediate results for visualization
+    need_intermediate = (
+        config.SAVE_MEDIAN_FILTER_PLOT or 
+        config.SAVE_MAD_OUTLIER_PLOT or 
+        config.SAVE_INTERPOLATION_PLOT
+    )
+    
+    if need_intermediate:
+        cleaned_df_original, processed_df_original, intermediate_original = processor_original.process_trajectory(
+            raw_df_original, verbose=verbose, return_intermediate=True
+        )
+    else:
+        cleaned_df_original, processed_df_original = processor_original.process_trajectory(
+            raw_df_original, verbose=verbose
+        )
+        intermediate_original = None
     
     # Stage 1b: Process OVERHEAD trajectory
     if verbose:
         print("\n--- Stage 1b: Overhead Trajectory Processing ---")
     
     processor_overhead = TrajectoryProcessor(**(processor_params or {}))
-    cleaned_df_overhead, processed_df_overhead = processor_overhead.process_trajectory(raw_df_overhead, verbose=verbose)
+    
+    if need_intermediate:
+        cleaned_df_overhead, processed_df_overhead, intermediate_overhead = processor_overhead.process_trajectory(
+            raw_df_overhead, verbose=verbose, return_intermediate=True
+        )
+    else:
+        cleaned_df_overhead, processed_df_overhead = processor_overhead.process_trajectory(
+            raw_df_overhead, verbose=verbose
+        )
+        intermediate_overhead = None
     
     # Stage 1.5: Process radius (applies to both coordinate systems)
     # Radius is the same in original and overhead (measured once, used in both)
@@ -784,6 +834,73 @@ def process_and_reconstruct(
                     coordinate_system="overhead",
                     verbose=verbose
                 )
+        
+        # Visualize intermediate processing steps (median filter, MAD outliers, interpolation)
+        if intermediate_original is not None or intermediate_overhead is not None:
+            if verbose:
+                print("\n--- Intermediate Processing Visualizations ---")
+            
+            # Median filter visualization
+            if config.SAVE_MEDIAN_FILTER_PLOT:
+                if intermediate_original is not None:
+                    visualize_median_filter_output(
+                        intermediate_original['raw'][['frame', 'x', 'y']],
+                        intermediate_original['after_median'][['frame', 'x', 'y']],
+                        output_path,
+                        coordinate_system="original",
+                        verbose=verbose
+                    )
+                
+                if intermediate_overhead is not None:
+                    visualize_median_filter_output(
+                        intermediate_overhead['raw'][['frame', 'x', 'y']],
+                        intermediate_overhead['after_median'][['frame', 'x', 'y']],
+                        output_path,
+                        coordinate_system="overhead",
+                        verbose=verbose
+                    )
+            
+            # MAD outlier detection visualization
+            if config.SAVE_MAD_OUTLIER_PLOT:
+                if intermediate_original is not None:
+                    visualize_mad_outlier_output(
+                        intermediate_original['after_median'][['frame', 'x', 'y']],
+                        intermediate_original['outlier_mask'],
+                        output_path,
+                        coordinate_system="original",
+                        verbose=verbose
+                    )
+                
+                if intermediate_overhead is not None:
+                    visualize_mad_outlier_output(
+                        intermediate_overhead['after_median'][['frame', 'x', 'y']],
+                        intermediate_overhead['outlier_mask'],
+                        output_path,
+                        coordinate_system="overhead",
+                        verbose=verbose
+                    )
+            
+            # Interpolation visualization
+            if config.SAVE_INTERPOLATION_PLOT:
+                if intermediate_original is not None:
+                    visualize_interpolation_output(
+                        cleaned_df_original[['frame', 'x', 'y']],  # After outlier removal (has NaN)
+                        intermediate_original['after_interpolation'][['frame', 'x', 'y']],
+                        intermediate_original['outlier_mask'],
+                        output_path,
+                        coordinate_system="original",
+                        verbose=verbose
+                    )
+                
+                if intermediate_overhead is not None:
+                    visualize_interpolation_output(
+                        cleaned_df_overhead[['frame', 'x', 'y']],  # After outlier removal (has NaN)
+                        intermediate_overhead['after_interpolation'][['frame', 'x', 'y']],
+                        intermediate_overhead['outlier_mask'],
+                        output_path,
+                        coordinate_system="overhead",
+                        verbose=verbose
+                    )
         
         # Visualize radius processing if available
         if config.SAVE_RADIUS_PROCESSING_PLOT and radius_fitted_df is not None and cleaned_radius_df is not None:
@@ -989,6 +1106,273 @@ def visualize_trajectory_processing(
     
     if verbose:
         print(f"  ✓ Saved trajectory visualization: {output_file}")
+
+
+def visualize_median_filter_output(
+    raw_df: pd.DataFrame,
+    filtered_df: pd.DataFrame,
+    output_path: Path,
+    coordinate_system: str = "overhead",
+    verbose: bool = True
+) -> None:
+    """
+    Visualize the effect of moving median filter on trajectory.
+    
+    Args:
+        raw_df: Original trajectory before median filter (frame, x, y)
+        filtered_df: Trajectory after median filter (frame, x, y)
+        output_path: Directory to save visualization
+        coordinate_system: Name of coordinate system ("original" or "overhead")
+        verbose: Print save information
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # Plot 1: X coordinate - Before vs After
+    axes[0, 0].plot(raw_df['frame'], raw_df['x'], 
+                    'o', alpha=0.3, markersize=4, label='Before Filter', color='lightcoral')
+    axes[0, 0].plot(filtered_df['frame'], filtered_df['x'], 
+                    '-', linewidth=2, label='After Median Filter', color='darkgreen')
+    axes[0, 0].set_xlabel('Frame Number', fontsize=11)
+    axes[0, 0].set_ylabel('X Coordinate (pixels)', fontsize=11)
+    axes[0, 0].set_title(f'X Coordinate - Median Filter Effect', fontsize=12, fontweight='bold')
+    axes[0, 0].legend(loc='best', fontsize=9)
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # Plot 2: Y coordinate - Before vs After
+    axes[0, 1].plot(raw_df['frame'], raw_df['y'], 
+                    'o', alpha=0.3, markersize=4, label='Before Filter', color='lightcoral')
+    axes[0, 1].plot(filtered_df['frame'], filtered_df['y'], 
+                    '-', linewidth=2, label='After Median Filter', color='darkgreen')
+    axes[0, 1].set_xlabel('Frame Number', fontsize=11)
+    axes[0, 1].set_ylabel('Y Coordinate (pixels)', fontsize=11)
+    axes[0, 1].set_title(f'Y Coordinate - Median Filter Effect', fontsize=12, fontweight='bold')
+    axes[0, 1].legend(loc='best', fontsize=9)
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # Plot 3: Difference in X coordinate
+    diff_x = filtered_df['x'].values - raw_df['x'].values
+    axes[1, 0].plot(raw_df['frame'], diff_x, 'o-', color='purple', alpha=0.6, markersize=3)
+    axes[1, 0].axhline(0, color='black', linestyle='--', linewidth=1, alpha=0.5)
+    axes[1, 0].set_xlabel('Frame Number', fontsize=11)
+    axes[1, 0].set_ylabel('Δ X (filtered - raw)', fontsize=11)
+    axes[1, 0].set_title('Change in X After Filtering', fontsize=12, fontweight='bold')
+    axes[1, 0].grid(True, alpha=0.3)
+    
+    # Plot 4: Difference in Y coordinate
+    diff_y = filtered_df['y'].values - raw_df['y'].values
+    axes[1, 1].plot(raw_df['frame'], diff_y, 'o-', color='purple', alpha=0.6, markersize=3)
+    axes[1, 1].axhline(0, color='black', linestyle='--', linewidth=1, alpha=0.5)
+    axes[1, 1].set_xlabel('Frame Number', fontsize=11)
+    axes[1, 1].set_ylabel('Δ Y (filtered - raw)', fontsize=11)
+    axes[1, 1].set_title('Change in Y After Filtering', fontsize=12, fontweight='bold')
+    axes[1, 1].grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    # Save plot
+    output_file = output_path / f"median_filter_{coordinate_system}.png"
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    if verbose:
+        print(f"  ✓ Saved median filter visualization: {output_file}")
+
+
+def visualize_mad_outlier_output(
+    filtered_df: pd.DataFrame,
+    outlier_mask: np.ndarray,
+    output_path: Path,
+    coordinate_system: str = "overhead",
+    verbose: bool = True
+) -> None:
+    """
+    Visualize outliers detected by MAD (Median Absolute Deviation) method.
+    
+    Args:
+        filtered_df: Trajectory after median filter (frame, x, y)
+        outlier_mask: Boolean array where True indicates outlier
+        output_path: Directory to save visualization
+        coordinate_system: Name of coordinate system ("original" or "overhead")
+        verbose: Print save information
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # Separate inliers and outliers
+    inliers = ~outlier_mask
+    outliers = outlier_mask
+    
+    num_outliers = np.sum(outliers)
+    total_points = len(outlier_mask)
+    outlier_percent = 100 * num_outliers / total_points
+    
+    # Plot 1: X coordinate with outliers highlighted
+    axes[0, 0].plot(filtered_df['frame'][inliers], filtered_df['x'][inliers], 
+                    'o', markersize=4, label='Inliers', color='darkgreen', alpha=0.7)
+    axes[0, 0].plot(filtered_df['frame'][outliers], filtered_df['x'][outliers], 
+                    'x', markersize=8, label=f'Outliers ({num_outliers})', color='red', markeredgewidth=2)
+    axes[0, 0].set_xlabel('Frame Number', fontsize=11)
+    axes[0, 0].set_ylabel('X Coordinate (pixels)', fontsize=11)
+    axes[0, 0].set_title(f'X Coordinate - MAD Outlier Detection', fontsize=12, fontweight='bold')
+    axes[0, 0].legend(loc='best', fontsize=9)
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # Plot 2: Y coordinate with outliers highlighted
+    axes[0, 1].plot(filtered_df['frame'][inliers], filtered_df['y'][inliers], 
+                    'o', markersize=4, label='Inliers', color='darkgreen', alpha=0.7)
+    axes[0, 1].plot(filtered_df['frame'][outliers], filtered_df['y'][outliers], 
+                    'x', markersize=8, label=f'Outliers ({num_outliers})', color='red', markeredgewidth=2)
+    axes[0, 1].set_xlabel('Frame Number', fontsize=11)
+    axes[0, 1].set_ylabel('Y Coordinate (pixels)', fontsize=11)
+    axes[0, 1].set_title(f'Y Coordinate - MAD Outlier Detection', fontsize=12, fontweight='bold')
+    axes[0, 1].legend(loc='best', fontsize=9)
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # Plot 3: 2D trajectory with outliers highlighted
+    axes[1, 0].plot(filtered_df['x'][inliers], filtered_df['y'][inliers], 
+                    'o-', markersize=4, linewidth=1, alpha=0.7, color='darkgreen', label='Inliers')
+    axes[1, 0].scatter(filtered_df['x'][outliers], filtered_df['y'][outliers], 
+                      s=100, marker='x', color='red', linewidths=2, label='Outliers', zorder=5)
+    axes[1, 0].set_xlabel('X (pixels)', fontsize=11)
+    axes[1, 0].set_ylabel('Y (pixels)', fontsize=11)
+    axes[1, 0].set_title(f'2D Trajectory - Outliers Marked', fontsize=12, fontweight='bold')
+    axes[1, 0].legend(loc='best', fontsize=9)
+    axes[1, 0].grid(True, alpha=0.3)
+    axes[1, 0].invert_yaxis()
+    axes[1, 0].set_aspect('equal', adjustable='box')
+    
+    # Plot 4: Outlier statistics
+    axes[1, 1].axis('off')
+    stats_text = f"""
+    MAD Outlier Detection Results
+    ═══════════════════════════════
+    
+    Coordinate System: {coordinate_system.capitalize()}
+    
+    Total Points: {total_points}
+    Inliers: {total_points - num_outliers} ({100 - outlier_percent:.2f}%)
+    Outliers: {num_outliers} ({outlier_percent:.2f}%)
+    
+    Status: {'✓ Clean data' if outlier_percent < 5 else '⚠ High outlier rate' if outlier_percent < 15 else '✗ Very noisy data'}
+    """
+    axes[1, 1].text(0.1, 0.5, stats_text, fontsize=12, verticalalignment='center',
+                   family='monospace', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.3))
+    
+    plt.tight_layout()
+    
+    # Save plot
+    output_file = output_path / f"mad_outliers_{coordinate_system}.png"
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    if verbose:
+        print(f"  ✓ Saved MAD outlier visualization: {output_file}")
+
+
+def visualize_interpolation_output(
+    before_interp_df: pd.DataFrame,
+    after_interp_df: pd.DataFrame,
+    outlier_mask: np.ndarray,
+    output_path: Path,
+    coordinate_system: str = "overhead",
+    verbose: bool = True
+) -> None:
+    """
+    Visualize the effect of interpolation on missing values (removed outliers).
+    
+    Args:
+        before_interp_df: Trajectory with NaN values where outliers were removed (frame, x, y)
+        after_interp_df: Trajectory after interpolation (frame, x, y)
+        outlier_mask: Boolean array indicating which points were outliers
+        output_path: Directory to save visualization
+        coordinate_system: Name of coordinate system ("original" or "overhead")
+        verbose: Print save information
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # Identify interpolated points (where outliers were)
+    interpolated_points = outlier_mask
+    original_points = ~outlier_mask
+    
+    num_interpolated = np.sum(interpolated_points)
+    
+    # Plot 1: X coordinate with interpolated values highlighted
+    axes[0, 0].plot(before_interp_df['frame'][original_points], 
+                    before_interp_df['x'][original_points], 
+                    'o', markersize=4, label='Original Data', color='darkblue', alpha=0.7)
+    axes[0, 0].plot(after_interp_df['frame'][interpolated_points], 
+                    after_interp_df['x'][interpolated_points], 
+                    's', markersize=6, label=f'Interpolated ({num_interpolated})', 
+                    color='orange', markeredgecolor='red', markeredgewidth=1.5)
+    axes[0, 0].plot(after_interp_df['frame'], after_interp_df['x'], 
+                    '-', linewidth=1, alpha=0.4, color='gray', label='Full Curve')
+    axes[0, 0].set_xlabel('Frame Number', fontsize=11)
+    axes[0, 0].set_ylabel('X Coordinate (pixels)', fontsize=11)
+    axes[0, 0].set_title(f'X Coordinate - Interpolation Effect', fontsize=12, fontweight='bold')
+    axes[0, 0].legend(loc='best', fontsize=9)
+    axes[0, 0].grid(True, alpha=0.3)
+    
+    # Plot 2: Y coordinate with interpolated values highlighted
+    axes[0, 1].plot(before_interp_df['frame'][original_points], 
+                    before_interp_df['y'][original_points], 
+                    'o', markersize=4, label='Original Data', color='darkblue', alpha=0.7)
+    axes[0, 1].plot(after_interp_df['frame'][interpolated_points], 
+                    after_interp_df['y'][interpolated_points], 
+                    's', markersize=6, label=f'Interpolated ({num_interpolated})', 
+                    color='orange', markeredgecolor='red', markeredgewidth=1.5)
+    axes[0, 1].plot(after_interp_df['frame'], after_interp_df['y'], 
+                    '-', linewidth=1, alpha=0.4, color='gray', label='Full Curve')
+    axes[0, 1].set_xlabel('Frame Number', fontsize=11)
+    axes[0, 1].set_ylabel('Y Coordinate (pixels)', fontsize=11)
+    axes[0, 1].set_title(f'Y Coordinate - Interpolation Effect', fontsize=12, fontweight='bold')
+    axes[0, 1].legend(loc='best', fontsize=9)
+    axes[0, 1].grid(True, alpha=0.3)
+    
+    # Plot 3: 2D trajectory showing interpolated points
+    axes[1, 0].plot(after_interp_df['x'][original_points], 
+                    after_interp_df['y'][original_points], 
+                    'o', markersize=4, alpha=0.7, color='darkblue', label='Original Data')
+    axes[1, 0].scatter(after_interp_df['x'][interpolated_points], 
+                      after_interp_df['y'][interpolated_points], 
+                      s=80, marker='s', color='orange', edgecolors='red', linewidths=1.5,
+                      label='Interpolated Points', zorder=5)
+    axes[1, 0].plot(after_interp_df['x'], after_interp_df['y'], 
+                    '-', linewidth=1, alpha=0.3, color='gray')
+    axes[1, 0].set_xlabel('X (pixels)', fontsize=11)
+    axes[1, 0].set_ylabel('Y (pixels)', fontsize=11)
+    axes[1, 0].set_title(f'2D Trajectory - Interpolated Points', fontsize=12, fontweight='bold')
+    axes[1, 0].legend(loc='best', fontsize=9)
+    axes[1, 0].grid(True, alpha=0.3)
+    axes[1, 0].invert_yaxis()
+    axes[1, 0].set_aspect('equal', adjustable='box')
+    
+    # Plot 4: Interpolation statistics
+    axes[1, 1].axis('off')
+    stats_text = f"""
+    Cubic Interpolation Results
+    ════════════════════════════════
+    
+    Coordinate System: {coordinate_system.capitalize()}
+    
+    Total Points: {len(outlier_mask)}
+    Original Points: {np.sum(original_points)} ({100*np.sum(original_points)/len(outlier_mask):.2f}%)
+    Interpolated: {num_interpolated} ({100*num_interpolated/len(outlier_mask):.2f}%)
+    
+    Method: Cubic spline interpolation
+    
+    Status: {'✓ Smooth trajectory' if num_interpolated < len(outlier_mask)*0.15 else '⚠ Many interpolated points'}
+    """
+    axes[1, 1].text(0.1, 0.5, stats_text, fontsize=12, verticalalignment='center',
+                   family='monospace', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.3))
+    
+    plt.tight_layout()
+    
+    # Save plot
+    output_file = output_path / f"interpolation_{coordinate_system}.png"
+    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    if verbose:
+        print(f"  ✓ Saved interpolation visualization: {output_file}")
 
 
 def visualize_trajectory_on_template(

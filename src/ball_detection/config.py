@@ -199,7 +199,7 @@ SAVE_FULL_BLOB_PIPELINE_VIDEO = True         # 2x3 grid showing all stages
 
 # Stop tracking when ball reaches pin area
 ENABLE_STOP_CONDITION = True                 # Enable automatic stop when near pins
-STOP_THRESHOLD_PCT = -0.05                   # Stop when Y ≤ (top_boundary + STOP_THRESHOLD_PCT * frame_height)
+STOP_THRESHOLD_PCT = -0.03                   # Stop when Y ≤ (top_boundary + STOP_THRESHOLD_PCT * frame_height)
                                              # Negative = stop ABOVE top boundary (toward frame top)
                                              # Example: If top=130, height=954, stop at Y≤111 (130 - 19)
 
@@ -253,6 +253,11 @@ SAVE_TRAJECTORY_PROCESSING_OVERHEAD_PLOT = True  # Overhead coordinates processi
 SAVE_RADIUS_PROCESSING_PLOT = True  # Radius model fitting plot
 SAVE_TRAJECTORY_ON_TEMPLATE_PLOT = True  # Static trajectory overlay on template
 SAVE_TRAJECTORY_ANIMATION_VIDEO = True  # Animated video showing trajectory frame-by-frame
+
+# Intermediate processing step visualizations
+SAVE_MEDIAN_FILTER_PLOT = True  # Show before/after median filter application
+SAVE_MAD_OUTLIER_PLOT = True  # Show detected outliers using MAD method
+SAVE_INTERPOLATION_PLOT = True  # Show interpolation of missing values
 
 # Video animation parameters
 ANIMATION_FPS = 30  # Frames per second for trajectory animation video
