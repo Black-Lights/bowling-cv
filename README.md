@@ -566,21 +566,57 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 
 ## Development Roadmap
 
-### Phase 1: Lane Detection (In Progress)
+### Phase 1: Lane Detection ✅ COMPLETE
 - [x] Horizontal foul line detection (bottom boundary)
 - [x] Vertical boundary detection (left & right sides)
 - [x] Master line voting system
 - [x] Perspective correction
 - [x] Tracking analysis
-- [ ] **Top boundary detection** ← Next task
+- [x] **Top boundary detection with MSAC fitting**
+- [x] Frame caching system
+- [x] Small patch removal
+- [x] Professional class-based architecture (LaneDetector)
+- [x] 6 intermediate visualization modes
 
-### Phase 2: Ball Tracking (Planned)
-- [ ] Ball detection algorithm
-- [ ] Multi-frame tracking
-- [ ] Trajectory extraction
-- [ ] Position smoothing
+### Phase 2: Ball Detection & Tracking ✅ COMPLETE
+- [x] **Stage A: Video Preprocessing**
+  - [x] 4-side lane masking using Phase 1 boundaries
+  - [x] 2D homography calculation (DLT)
+  - [x] Perspective transformation to overhead view
+  - [x] High-quality encoding (PNG + yuv444p)
+- [x] **Stage B: Motion Detection**
+  - [x] MOG2 background subtraction
+  - [x] Shadow removal and separation
+  - [x] Morphological noise removal
+- [x] **Stage D: Blob Analysis**
+  - [x] Geometric validation (circularity, aspect ratio)
+  - [x] Auto-calibration system
+- [x] **Stage C+E: Tracking-by-Detection**
+  - [x] Kalman filter tracking
+  - [x] Dual-mode search (global + local)
+  - [x] Confirmation logic
+  - [x] Reactivation search
+- [x] **Stage F: Stop Condition & Export**
+  - [x] Configurable stop threshold
+  - [x] 5 Kalman predictions for extrapolation
+  - [x] Trajectory JSON export (original + overhead)
+  - [x] Trajectory plots
+- [x] **Stage G: Post-Processing**
+  - [x] Trajectory cleaning (median filter, outlier detection)
+  - [x] Template reconstruction with scaling
+  - [x] CSV export for analysis
+- [x] **Integrated Visualization**
+  - [x] 4 diagnostic videos (candidates, selection, trajectory, debug)
 
-### Phase 3: 3D Reconstruction (Planned)
+### Phase 3: Advanced Trajectory Analysis (In Progress)
+- [ ] Velocity and acceleration curves
+- [ ] Path curvature analysis for hook detection
+- [ ] Impact angle calculations
+- [ ] Ball speed measurements (mph/fps)
+- [ ] Multi-throw comparative analysis
+- [ ] Statistical trajectory metrics
+
+### Phase 4: 3D Reconstruction (Planned)
 - [ ] Camera calibration
 - [ ] Perspective transformation
 - [ ] 3D trajectory mapping
@@ -656,10 +692,46 @@ For questions or collaboration inquiries:
 
 ---
 
-## Note
+## Project Status & Updates
 
-This is a work in progress. **Phase 1 (Lane Detection)** is currently being completed - bottom foul line and side boundaries are working, with top boundary detection as the next development task. The implementation is being developed iteratively, with each phase building upon the previous one.
+**Phase 1 (Lane Detection)** - ✅ **COMPLETE** (February 2026)
+- All 4 boundaries successfully detected (top, bottom, left, right)
+- Professional class-based architecture (LaneDetector)
+- Frame caching for performance optimization
+- MSAC-based top boundary detection
 
-**Current Focus**: Completing lane detection by adding top boundary detection to fully define the bowling area.
+**Phase 2 (Ball Detection & Tracking)** - ✅ **COMPLETE** (February 2026)
+- Complete pipeline: Stages A through G integrated
+- Tracking-by-Detection architecture (filter → select → track)
+- Stop condition with Kalman predictions
+- Post-processing with trajectory cleaning and reconstruction
+- 4 diagnostic visualization videos
+- JSON and CSV trajectory export
 
-**Last Updated**: January 2026
+**Current Focus**: Advanced trajectory analysis (velocity curves, hook detection, impact angles)
+
+**Next Phase**: 3D trajectory reconstruction and spin/rotation analysis
+
+**Last Updated**: February 5, 2026
+
+---
+
+## Recent Achievements
+
+### Stage G Post-Processing (February 5, 2026)
+- Integrated trajectory cleaning pipeline
+- MAD outlier detection with Modified Z-score
+- Template reconstruction with coordinate scaling
+- CSV export for external analysis tools
+
+### Complete Phase 2 Pipeline (February 2026)
+- Tracking-by-Detection architecture implemented
+- All 7 stages integrated (A through G)
+- Tested on multiple videos with excellent results
+- Zero outliers detected in test6 (indicates robust tracking)
+
+### Bug Fixes & Improvements
+- Fixed reactivation search direction (critical fix)
+- Implemented shadow separation via erosion
+- Strengthened geometric filters
+- Prevented Kalman drift with quick fallback
