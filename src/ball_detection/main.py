@@ -297,14 +297,26 @@ def main():
                     )
                     
                     print(f"\n>>> Post-processing complete for {video_file}")
-                    print(f"  Raw trajectory: {len(result['raw_trajectory'])} points")
-                    print(f"  Processed: {len(result['processed_trajectory'])} points")
+                    print(f"  Raw trajectory (original): {len(result['raw_trajectory_original'])} points")
+                    print(f"  Raw trajectory (overhead): {len(result['raw_trajectory_overhead'])} points")
+                    print(f"  Processed (original): {len(result['processed_trajectory_original'])} points")
+                    print(f"  Processed (overhead): {len(result['processed_trajectory_overhead'])} points")
                     print(f"  Reconstructed (template): {len(result['reconstructed_trajectory'])} points")
                     
                     if config.SAVE_PROCESSED_TRAJECTORY_CSV:
                         print(f"  Saved CSVs:")
-                        print(f"    - trajectory_processed.csv")
+                        print(f"    - trajectory_processed_original.csv")
+                        print(f"    - trajectory_processed_overhead.csv")
                         print(f"    - trajectory_reconstructed.csv")
+                    
+                    # Report visualizations
+                    if config.SAVE_TRAJECTORY_ON_TEMPLATE_PLOT:
+                        print(f"  Saved visualization:")
+                        print(f"    - trajectory_on_template.png")
+                    
+                    if config.SAVE_TRAJECTORY_ANIMATION_VIDEO:
+                        print(f"  Saved animation:")
+                        print(f"    - trajectory_animation.mp4")
                 else:
                     print(f"  Warning: Trajectory data not found: {trajectory_json}")
                     print(f"  Skipping post-processing for this video")
