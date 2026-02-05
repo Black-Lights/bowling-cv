@@ -1,13 +1,17 @@
 """
-Configuration file for bowling lane detection
+Configuration file for bowling lane detection - Phase 1
 Edit parameters here without touching the main code
+
+Version: 1.0.0
+Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
+Last Updated: January 30, 2026
 """
 
-# ============================================
-# VIDEO CONFIGURATION
-# ============================================
-
 import os
+
+# ============================================
+# PROJECT PATHS
+# ============================================
 
 # Base paths (relative to project root)
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -16,25 +20,37 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'output')
 
 # List of videos to process (will be loaded from assets/input/)
 VIDEO_FILES = [
-    'cropped_test3.mp4',  # Test video for initial setup
-    # Add more videos as needed:
-    # 'cropped_test2.mp4',
-    # 'cropped_test4.mp4',
-    # 'cropped_test5.mp4',
+    'cropped_test3.mp4',
     'cropped_test6.mp4',
-    'cropped_test7.mp4'
+    'cropped_test7.mp4',
+    'cropped_test9.mp4',
+    'cropped_test10.mp4'
 ]
 
+# Output configuration
+SAVE_MASKED_VIDEO = True # Save masked video (will be deleted after processing if False)
+SAVE_PREPROCESSED_VIDEO = False  # Save preprocessed video (will be deleted after processing if False)
+SAVE_SOBEL_VIDEO = True # Save Sobel filter visualization video
+SAVE_TOP_MASKED_VIDEO = False  # Save top boundary masked video
+SAVE_COLLECTION_VIDEO = False  # Save collection video for all frames
+SAVE_INTERMEDIATE_VIDEOS = False  # Enable legacy intermediate video debug system (see INTERMEDIATE_MODES below)
+
+# Frame caching for faster iteration (saves ~4 mins per video during development)
+SAVE_PREPROCESSED_FRAMES = True  # Save preprocessed frames as .npz file for reuse in later phases
+SAVE_MASKED_FRAMES = True  # Save masked frames as .npz file for reuse in later phases
+# When True: frames are saved to output/video_name/preprocessed_frames.npz (or masked_frames.npz)
+# On next run: if file exists, loads from cache instead of reprocessing (huge speedup!)
+# When False: always reprocess frames, don't save cache
+
+
 # ============================================
-# PHASE 1: LINE COLLECTION
+# PHASE 1: DETECTION PARAMETERS
 # ============================================
+
+# --- Bottom & Side Boundaries (Foul Line & Master Lines) ---
 
 # Number of frames to collect lines from (first N frames)
 NUM_COLLECTION_FRAMES = 100
-
-# ============================================
-# PHASE 2: MASTER LINE COMPUTATION
-# ============================================
 
 # Bin width for voting system (pixels)
 BIN_WIDTH = 10
@@ -45,68 +61,93 @@ VOTE_THRESHOLD = 0.15  # 15%
 # Angle tolerance for filtering lines (degrees)
 ANGLE_TOLERANCE = 3
 
+# Angle mode: 'from_vertical' or 'from_horizontal'
+USE_ABSOLUTE_ANGLES = True  # True = from_vertical (recommended)
+ANGLE_OFFSET = 0  # degrees
+
+
+# --- Top Boundary (Pin Area) ---
+
+# Use full video or limited frames for top detection
+TOP_DETECTION_USE_FULL_VIDEO = True
+TOP_DETECTION_FRAMES = 100  # Only used if USE_FULL_VIDEO = False
+
+# Top scan region (avoid scoreboard at very top)
+TOP_SCAN_REGION_START = 0.10  # Start at 10% from top
+TOP_SCAN_REGION_END = 0.35    # End at 35% from top
+
+# HSV preprocessing - Gap filling thresholds
+MAX_PATCH_SIZE_ROW = 100  # Fill horizontal gaps ≤ 100px
+MAX_PATCH_SIZE_COL = 50   # Fill vertical gaps ≤ 50px
+
+# HSV preprocessing - Small patch removal from top (keeps only large pin deck area)
+TOP_REGION_RATIO = 0.3        # Top 30% of image to scan for small patches
+MAX_TOP_PATCH_AREA = 5000     # Remove patches < 5000 pixels from top (keeps only large pin deck)
+
+# Sobel edge detection parameters
+SOBEL_KERNEL_SIZE = 5      # Kernel size (must be odd: 1, 3, 5, 7)
+SOBEL_THRESHOLD = 10       # Minimum edge strength
+CENTER_REGION_START = 0.25 # Center region start (25% from left)
+CENTER_REGION_END = 0.75   # Center region end (75% from left)
+TOP_CANDIDATES_RATIO = 0.20  # Top 20% strongest rows
+
+# MSAC (M-estimator SAmple Consensus) parameters
+MSAC_RESIDUAL_THRESHOLD = 5.0  # Max distance for inliers (pixels)
+MSAC_MAX_TRIALS = 1000         # Number of iterations
+MSAC_MIN_SAMPLES = 2           # Minimum points to fit line
+MSAC_RANDOM_STATE = 42         # For reproducibility
+
+
+
 # ============================================
-# PHASE 3: TOP BOUNDARY DETECTION
+# FILE MANAGEMENT - WHAT TO SAVE/DELETE
 # ============================================
 
-# Top boundary detection configuration
-TOP_DETECTION_USE_FULL_VIDEO = True  # True = use entire video, False = use limited frames
-TOP_DETECTION_FRAMES = 100  # Number of frames to process (if USE_FULL_VIDEO = False)
+# --- Analysis Plots (Always generated) ---
 
-# Top scan region (process only specific portion of frame to avoid scoreboard/text at very top)
-TOP_SCAN_REGION_START = 0.10  # Start scanning at 10% from top (skip scoreboard area)
-TOP_SCAN_REGION_END = 0.35    # End scanning at 35% from top (where pins area ends)
+# Bin analysis plots (voting distribution)
+SAVE_BIN_ANALYSIS_PLOTS = True
 
-# Preprocessing configuration (HSV filtering and gap filling)
-MAX_PATCH_SIZE_ROW = 100  # Fill horizontal black patches smaller than this (in pixels)
-MAX_PATCH_SIZE_COL = 50   # Fill vertical black patches smaller than this (in pixels)
+# Tracking analysis plots (stability over time)
+SAVE_TRACKING_PLOTS = True
 
-# Sobel edge detection for top boundary
-SOBEL_KERNEL_SIZE = 5      # Sobel kernel size (must be odd: 1, 3, 5, 7)
-SOBEL_THRESHOLD = 10       # Minimum edge strength to consider a point
-CENTER_REGION_START = 0.25 # Start of center region (25% from left)
-CENTER_REGION_END = 0.75   # End of center region (75% from left)
-TOP_CANDIDATES_RATIO = 0.20  # Top 20% of strongest rows to consider
+# MSAC fitting analysis plots (inliers/outliers/residuals)
+SAVE_MSAC_PLOTS = True
 
+# Top line intersection plots (Y coordinates)
+SAVE_INTERSECTION_PLOTS = True
+
+# Summary comparison plot (all videos)
+SAVE_SUMMARY_PLOT = True
+
+
+# --- Final Outputs (Always Saved) ---
+
+# Final video with all 4 boundaries (ALWAYS SAVED)
+# Located at: output/<video_name>/final_all_boundaries_<video_name>.mp4
+
+# Boundary data JSON (ALWAYS SAVED)
+# Located at: output/<video_name>/boundary_data.json
+
+# Master line video with bottom/left/right (ALWAYS SAVED)
+# Located at: output/<video_name>/master_final_<video_name>.mp4
 
 
 # ============================================
 # VISUALIZATION OPTIONS
 # ============================================
 
-# Main visualization mode for final video
+# Main visualization mode for master line video
 # Options: 'final', 'master_lines_only', 'with_stats'
 VISUALIZATION_MODE = 'final'
 
-# Save bin analysis plots (PNG files showing voting distribution)
-SAVE_BIN_ANALYSIS = True
+# Intermediate folder for temporary files
+INTERMEDIATE_FOLDER = 'intermediate'  # Subfolder name in output directory
 
-# Save collection phase video (first 100 frames with approach1)
-SAVE_COLLECTION_VIDEO = False
-
-# ============================================
-# INTERMEDIATE VISUALIZATION MODES
-# ============================================
-# Create videos showing intermediate processing steps
+# Legacy intermediate visualization system (for debugging bottom/side detection)
 # Set to True to generate intermediate videos for debugging
-
-SAVE_INTERMEDIATE_VIDEOS = False
-
-# List of intermediate modes to generate (only if SAVE_INTERMEDIATE_VIDEOS = True)
-# Available modes:
-#   'edges_horizontal' - Canny edges for horizontal line detection
-#   'edges_vertical' - Canny edges for vertical line detection
-#   'gaussian_horizontal' - Gaussian blur for horizontal line detection
-#   'gaussian_vertical' - Gaussian blur for vertical line detection
-#   'grayscale_horizontal' - Grayscale for horizontal line detection
-#   'grayscale_vertical' - Grayscale for vertical line detection
-#   'otsu_horizontal' - Otsu threshold for horizontal line detection
-#   'otsu_vertical' - Otsu threshold for vertical line detection
-#   'contours_vertical' - Contour detection for vertical line detection
-#   'mask_vertical' - Mask after morphology for vertical line detection
-#   'dilated_vertical' - Dilated mask for vertical line detection
-#   'eroded_vertical' - Eroded mask for vertical line detection
-
+# Available modes: 'edges_horizontal', 'edges_vertical', 'gaussian_vertical', 
+#                  'grayscale_vertical', 'otsu_vertical', 'mask_vertical', etc.
 INTERMEDIATE_MODES = [
     'edges_horizontal',
     'edges_vertical',
@@ -115,29 +156,6 @@ INTERMEDIATE_MODES = [
     'otsu_vertical',
     'mask_vertical',
 ]
-
-# ============================================
-# TRACKING ANALYSIS OPTIONS
-# ============================================
-
-# Generate tracking analysis plots
-GENERATE_TRACKING_PLOTS = True
-
-# Create summary comparison across all videos
-CREATE_SUMMARY_PLOT = True
-
-# ============================================
-# SLOPE/ANGLE CORRECTION
-# ============================================
-
-# Angle offset to correct slope calculation
-# If angles seem inverted, try adjusting this
-ANGLE_OFFSET = 0  # degrees
-
-# Use absolute angle values (convert negative to positive relative to vertical)
-# FALSE = angles from horizontal (-90° to 90°, confusing for vertical lines)
-# TRUE = angles from vertical (0° = vertical, 90° = horizontal, more intuitive)
-USE_ABSOLUTE_ANGLES = True  # Recommended for vertical lane boundaries
 
 # ============================================
 # DEBUG OPTIONS

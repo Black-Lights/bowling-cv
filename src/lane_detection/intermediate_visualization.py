@@ -192,29 +192,12 @@ def create_intermediate_video(video_path, output_path, mode, detect_foul_func):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     
-    # Setup video writer
-    codecs_to_try = [('avc1', '.mp4'), ('XVID', '.avi'), ('MJPG', '.avi')]
+    # Setup video writer - use mp4v codec (most reliable)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    final_output_path = os.path.splitext(output_path)[0] + '.mp4'
+    out = cv2.VideoWriter(final_output_path, fourcc, fps, (width, height))
     
-    out = None
-    final_output_path = output_path
-    
-    for codec, extension in codecs_to_try:
-        try:
-            if not output_path.endswith(extension):
-                final_output_path = os.path.splitext(output_path)[0] + extension
-            
-            fourcc = cv2.VideoWriter_fourcc(*codec)
-            out = cv2.VideoWriter(final_output_path, fourcc, fps, (width, height))
-            
-            if out.isOpened():
-                break
-            else:
-                out.release()
-                out = None
-        except:
-            continue
-    
-    if out is None or not out.isOpened():
+    if not out.isOpened():
         print(f"    Error: Could not initialize video writer")
         cap.release()
         return

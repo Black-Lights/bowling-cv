@@ -4,7 +4,7 @@ Master line computation using voting system
 
 import numpy as np
 import matplotlib.pyplot as plt
-from detection_utils import *
+from .detection_utils import *
 
 
 def compute_master_line_from_collection(collected_lines, median_foul_params, bin_width=10,

@@ -16,7 +16,7 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Tracking** - Planned  
+**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F+G Integrated)  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
 **Phase 4: Spin/Rotation Analysis** - Planned  
 **Phase 5: Pin Detection** - Planned
@@ -67,15 +67,20 @@ pip install opencv-python numpy scipy pandas matplotlib tqdm scikit-learn
 ### Running Complete Lane Detection (All 4 Boundaries)
 
 ```bash
-# Step 1: Detect bottom, left, and right boundaries
-cd src/lane_detection
+# Run the complete pipeline (uses LaneDetector class)
 python main.py
 
-# Step 2: Detect top boundary with MSAC fitting
-python test_top_detection.py
+# Or specify a video
+python main.py --video cropped_test3.mp4
 ```
 
 **Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
+
+**New Features:**
+- ✅ Frame caching for faster iteration (saves ~4 mins per video)
+- ✅ Small patch removal from top region (cleaner Sobel detection)
+- ✅ Professional class-based architecture (LaneDetector)
+- ✅ Automatic dependency resolution
 
 ---
 
@@ -93,19 +98,32 @@ bowling-cv/
 │
 ├── src/                           # Source code
 │   ├── __init__.py
-│   └── lane_detection/            # Lane boundary detection module
+│   ├── lane_detection/            # Lane boundary detection module (Phase 1)
+│   │   ├── __init__.py
+│   │   ├── config.py              # Configuration settings
+│   │   ├── lane_detector.py       # LaneDetector class (main entry)
+│   │   ├── main_legacy.py         # Legacy entry point
+│   │   ├── detection_functions.py # Line detection algorithms
+│   │   ├── detection_utils.py     # Utility functions
+│   │   ├── master_line_computation.py # Master line voting system
+│   │   ├── top_boundary_detection.py  # Top boundary with MSAC
+│   │   ├── mask_lane_area.py      # Lane masking utilities (shared)
+│   │   ├── preprocess_frames.py   # HSV filtering + gap filling
+│   │   ├── intermediate_visualization.py # Debug visualizations
+│   │   └── tracking_analysis.py   # Tracking stability analysis
+│   │
+│   └── ball_detection/            # Ball detection module (Phase 2)
 │       ├── __init__.py
-│       ├── config.py              # Configuration settings
-│       ├── main.py                # Main entry point (bottom/left/right)
-│       ├── test_top_detection.py  # Top boundary detection script
-│       ├── detection_functions.py # Line detection algorithms
-│       ├── detection_utils.py     # Utility functions
-│       ├── master_line_computation.py # Master line voting system
-│       ├── top_boundary_detection.py  # Top boundary with MSAC
-│       ├── mask_lane_area.py      # Lane masking utilities
-│       ├── preprocess_frames.py   # HSV filtering + gap filling
-│       ├── intermediate_visualization.py # Debug visualizations
-│       └── tracking_analysis.py   # Tracking stability analysis
+│       ├── config.py              # Ball detection configuration
+│       ├── main.py                # Ball detection entry point
+│       ├── mask_video.py          # Video masking for ball focus
+│       ├── homography.py          # 2D homography calculation (DLT)
+│       ├── transform_video.py     # Perspective transformation to overhead view
+│       ├── motion_detection.py    # MOG2 background subtraction (Stage B)
+│       ├── roi_logic.py           # Kalman filter tracking (Stages C+E)
+│       ├── blob_analysis.py       # Geometric validation (Stage D)
+│       ├── integrated_visualization.py # 4 diagnostic visualization videos
+│       └── roi_visualization.py   # Legacy visualization (pre-integration)
 │
 ├── output/                        # Generated outputs
 │   └── <video_name>/
@@ -118,7 +136,19 @@ bowling-cv/
 │       ├── top_vis_masked_*.mp4   # Preprocessed with top line
 │       ├── msac_fitting_*.png     # MSAC analysis plot
 │       ├── bin_analysis_*.png     # Voting system visualization
-│       └── tracking_*.png         # Tracking stability plots
+│       ├── tracking_*.png         # Tracking stability plots
+│       └── ball_detection/        # Ball detection outputs
+│           ├── intermediate/      # Intermediate stage videos
+│           │   ├── *_lane_masked.mp4          # 4-side masked video
+│           │   ├── *_foreground_mask.mp4      # MOG2 raw output
+│           │   ├── *_shadow_removed.mp4       # After shadow threshold
+│           │   ├── *_denoised.mp4             # Final clean mask
+│           │   └── *_motion_comparison.mp4    # 2×2 comparison grid
+│           ├── *_transformed.mp4              # Overhead perspective view
+│           ├── *_integrated_candidates.mp4    # All validated candidates + ROI
+│           ├── *_integrated_selection.mp4     # Search strategy visualization
+│           ├── *_integrated_trajectory.mp4    # Ball trajectory trail
+│           └── *_integrated_debug.mp4         # Complete debug overlay
 │
 └── docs/                          # Documentation
     ├── ANGLE_GUIDE.md             # Angle calculation documentation
@@ -134,6 +164,101 @@ bowling-cv/
 ### ✅ Implemented (Phase 1 - COMPLETE)
 - **Complete Lane Boundary Detection**
   - ✅ Horizontal foul line detection (bottom boundary)
+  - ✅ Vertical master lines (left & right boundaries)
+  - ✅ Top boundary detection (pin area) with MSAC fitting
+  - ✅ Professional class-based architecture (LaneDetector)
+  - ✅ Frame caching system (saves ~4 mins per video)
+  - ✅ Small patch removal from top region
+  - ✅ 6 intermediate visualization modes
+
+### ✅ Implemented (Phase 2 - COMPLETE)
+- **Ball Detection & Tracking**
+  - ✅ **Stage A: Video Preprocessing**
+    - 4-side lane masking using Phase 1 boundaries
+    - 2D homography calculation (DLT)
+    - Perspective transformation to overhead view (20 px/in)
+    - High-quality encoding (PNG + yuv444p, no artifacts)
+  
+  - ✅ **Stage B: Motion Detection**
+    - MOG2 background subtraction (500 frame history)
+    - Shadow removal (threshold at 200)
+    - Shadow separation via erosion (2 iterations)
+    - Morphological opening for noise removal
+    - Intermediate visualization (4 videos)
+  
+  - ✅ **Stage D: Blob Analysis & Geometric Validation**
+    - Connected component analysis
+    - Circularity filter (≥ 0.70 for ball shapes)
+    - Aspect ratio filter (≤ 1.8 to reject shadows)
+    - Size-based filtering (perspective-aware)
+    - Auto-calibration system for blob parameters
+  
+  - ✅ **Stage C+E: Tracking-by-Detection Architecture**
+    - **Correct Implementation**: Filter ALL (Stage D) → Select (Stage C) → Track (Stage E)
+    - Kalman filter for position prediction (4-state: x, y, vx, vy)
+    - Dual search modes:
+      - **Global Search Type 1 (Initial)**: Exclude upper 30%, select near foul line
+      - **Global Search Type 2 (Reactivation)**: Search above last position (Y < last_y + margin)
+        - ⚠️ Fixed: Now correctly searches toward pins (smaller Y values)
+      - **Local Tracking**: ROI around Kalman prediction
+    - Perspective-aware dynamic ROI: B = max(30px, 0.15 × y_ball)
+    - Confirmation logic: 20 frames + 240px travel distance
+    - Reactivation timeout: 60 frames before full frame reset
+    - MAX_LOST_FRAMES = 2 (prevents Kalman drift)
+  
+  - ✅ **Integrated Visualization System**
+    - 4 diagnostic videos showing complete tracking pipeline
+    - Candidates view (all validated + selected + ROI)
+    - Selection strategy (search zones, exclusion areas)
+    - Trajectory view (ball path with fading trail)
+    - Debug overlay (complete info panel)
+  
+  - ✅ **Stage F: Stop Condition & Trajectory Export**
+    - **Configurable stop threshold** (2% above top boundary - allows tracking to pins)
+      - NEW: Stops when Y ≤ top_boundary - 2% of frame_height
+      - Example: top=130, height=954 → stops at Y≤111 (closer to pins)
+    - **3-Boundary Masking Mode** for tracking (L+R+B only)
+      - Top boundary NOT masked during tracking (allows complete trajectory)
+      - Stage A (homography) still uses 4 boundaries for correct transformation
+    - **5 Kalman Predictions** after stopping (NEW)
+      - Replaced single linear interpolation with 5 sequential Kalman predictions
+      - Simulates ball motion for 5 future frames
+      - More accurate trajectory extrapolation using filter state propagation
+    - Early tracking termination when ball reaches pin area
+    - Saves ~35-45% processing time (tested: 141/254 frames on cropped_test3)
+    - Trajectory data export for post-processing:
+      - Original (perspective) coordinates with frame numbers
+      - Transformed (overhead) coordinates via homography
+      - Frame-accurate timing (frame_number field for spin analysis)
+      - 5 interpolated endpoints in both coordinate systems (NEW)
+      - JSON format with complete metadata
+    - Enhanced visualizations:
+      - Stop threshold line (magenta)
+      - Interpolated trajectory with 5 predictions (dashed orange)
+      - Trajectory plots on original and overhead views
+  
+  - ✅ **Stage G: Post-Processing (Trajectory Cleaning & Reconstruction)**
+    - **Stage G1: Trajectory Processing**
+      - Moving median filter (window=5) - removes spikes and noise
+      - MAD outlier detection (threshold=3.5) - statistical outlier removal
+      - Cubic interpolation - fills gaps from outlier removal
+      - Savitzky-Golay smoothing (window=45, poly=2) - final smoothing
+    - **Stage G2: Template Reconstruction**
+      - Boundary filtering (removes points outside valid lane area)
+      - Coordinate scaling from homography space to template space
+      - Resolution smoothing (window=15, poly=3) - removes pixelation artifacts
+    - **Output Files**:
+      - `trajectory_processed.csv` - cleaned trajectory in homography space
+      - `trajectory_reconstructed.csv` - final trajectory on lane template
+    - Fully integrated into main pipeline as Step 6
+    - Configurable via `--skip-postprocess` CLI flag
+
+### 🔄 In Progress (Phase 2)
+- **Trajectory Analysis & Physics**
+  - Velocity and acceleration curves
+  - Path curvature analysis
+  - Impact angle calculations
+  - Comparative analysis across multiple throws
   - ✅ Vertical lane boundary detection (left & right sides)
   - ✅ Top boundary detection (pin area) with MSAC line fitting
   - ✅ Master line computation using voting system
@@ -144,11 +269,52 @@ bowling-cv/
   - ✅ Robust MSAC (M-estimator SAmple Consensus) fitting
   - ✅ Complete lane box (all 4 boundaries)
 
-### Planned (Phase 2+)
-- **Ball Detection and Tracking (Phase 2)**
-  - Ball detection using color/motion
-  - Frame-to-frame tracking
-  - Trajectory smoothing
+### 🔄 In Progress (Phase 2 - Ball Detection)
+- **Video Masking** ✅ COMPLETE
+  - Reuses Phase 1 lane boundaries
+  - 4-side masking (top, bottom, left, right)
+  - Two modes: video file or frame generator
+  - Memory-efficient frame processing
+  - Foul line area properly excluded (30px cutoff)
+- **2D Homography & Perspective Transformation** ✅ COMPLETE
+  - Direct Linear Transform (DLT) for homography calculation
+  - Perspective transformation to overhead view
+  - Uniform scaling (20 px/in) preserves circular shapes
+  - Auto-crop to remove black borders
+  - High-quality encoding (PNG frames + yuv444p)
+  - Real-world dimensions: 60 ft × 41.5 in bowling lane
+- **Motion Detection (Background Subtraction)** ✅ COMPLETE
+  - MOG2 (Mixture of Gaussians) background subtractor
+  - Shadow removal (threshold grey pixels at 127)
+  - Morphological opening for noise removal (3×3 ellipse kernel)
+  - Intermediate videos: foreground mask, shadow removed, denoised
+  - 2×2 comparison video for debugging
+- **ROI Logic & Tracking (Kalman Filter)** ✅ COMPLETE
+  - Dual-mode tracking: Global Search + Local Tracking
+  - OpenCV Kalman Filter (4-state: x, y, vx, vy)
+  - Perspective-aware dynamic ROI sizing: B_t = max(30px, 0.15 * y_ball)
+  - Global search: prioritizes foul line + negative Y velocity filtering
+  - Local tracking: searches within predicted ROI box
+  - 10-frame timeout before reverting to global search
+  - 6 intermediate videos: global search, local tracking, Kalman predictions, mode comparison, scaling demo, full pipeline
+  - **Confirmation Logic (Problem 2 Solution)**:
+    - Dual confirmation: 20 consecutive frames + 240px travel distance (~12 feet)
+    - Unconfirmed object lost → Full lane search (prevents false restriction if tracking hand)
+    - Confirmed ball lost → Restricted search (y < last_position - 50px buffer)
+    - Physics-informed: ball cannot move back toward camera
+    - Prevents re-detecting ball behind where it was lost
+    - Successfully tested: Frame 109 confirmation, Frame 139 restricted search
+- **Ball Filtering (Blob Analysis)** (Next - Stage D)
+  - Circularity filter (C > 0.65)
+  - Aspect ratio validation (< 2.0)
+  - Size constraints (MIN/MAX radius)
+  - Hand vs. ball discrimination
+- **Trajectory Extraction** (Upcoming)
+  - Ball position time series
+  - Velocity and acceleration analysis
+  - Path smoothing algorithms
+
+### Planned (Phase 3+)
 - **3D Trajectory Reconstruction**
 - **Spin/Rotation Analysis and Axis Detection**
 - **Pin Detection and Topple Counting**
@@ -172,26 +338,231 @@ bowling-cv/
 
 ## Usage Guide
 
-### Configuration
+### Phase 1: Complete Lane Detection
 
-Edit [`src/lane_detection/config.py`](src/lane_detection/config.py) to customize:
+```bash
+# Run the complete pipeline (uses LaneDetector class)
+python main.py
 
-- **Video files to process**: Update `VIDEO_FILES` list
-- **Collection parameters**: `NUM_COLLECTION_FRAMES`, `BIN_WIDTH`, `VOTE_THRESHOLD`
-- **Visualization options**: `VISUALIZATION_MODE`, `SAVE_BIN_ANALYSIS`
-- **Angle calculations**: `USE_ABSOLUTE_ANGLES`, `ANGLE_TOLERANCE`
-- **Debug options**: `DEBUG_MODE`, `SAVE_DEBUG_FRAMES`
+# Or specify a video
+python main.py --video cropped_test3.mp4
+```
 
-### Running as a Module
+**Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
+
+### Phase 2: Ball Detection (Stages B+C+D+E+F+G Integrated)
+
+```bash
+# Run complete ball detection pipeline (all 6 steps)
+python -m src.ball_detection.main --video cropped_test3.mp4
+
+# Or skip specific steps if you already have preprocessed files
+python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --skip-transform --skip-motion --skip-roi
+
+# Skip post-processing if you only need raw trajectory
+python -m src.ball_detection.main --video cropped_test3.mp4 --skip-postprocess
+```
+
+**Integrated Tracking Outputs (4 diagnostic videos + trajectory data + post-processing):**
+- `*_integrated_candidates.mp4` - Shows all validated candidates (cyan), selected candidate (yellow), ROI box (green in local mode), candidate counts
+- `*_integrated_selection.mp4` - Search strategy visualization:
+  - **GLOBAL (initial)**: Red exclusion zone (upper 30%), green search zone
+  - **GLOBAL (reactivation)**: Green search line above last position, orange last position marker
+  - **LOCAL**: Green ROI box, red Kalman prediction crosshair
+- `*_integrated_trajectory.mp4` - Ball trajectory trail with fading effect, current position highlight, interpolated section (dashed)
+- `*_integrated_debug.mp4` - Complete overlay with transparent info panel showing mode, candidates, detection status
+- `*_trajectory_data.json` - **NEW**: Complete trajectory export for post-processing
+  - Original (perspective) coordinates: {index, frame_number, x, y, interpolated}
+  - Transformed (overhead) coordinates: {index, frame_number, x, y, interpolated}
+  - `frame_number`: Actual video frame number (for timing/spin analysis)
+  - `index`: Sequential trajectory point number (0, 1, 2...)
+  - Interpolated endpoints: {original: {x, y}, transformed: {x, y}}
+  - Stop info: {stopped_at_frame, stop_threshold_y, top_boundary_y}
+  - Statistics: {total_points, extrapolated_endpoints}
+- `*_original_trajectory.png` - **NEW**: Trajectory plot on perspective view with stop threshold line
+- `*_overhead_trajectory.png` - **NEW**: Trajectory plot on overhead (transformed) view
+
+**Stage G Post-Processing Outputs:**
+- `trajectory_processed.csv` - Cleaned trajectory in homography space (median filter + outlier removal + smoothing)
+- `trajectory_reconstructed.csv` - Final trajectory scaled to lane template coordinates
+
+**Stage A-B Intermediate Outputs:**
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
+- `output/<video_name>/ball_detection/cropped_<video>_transformed.mp4` - Overhead perspective view
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_foreground_mask.mp4` - MOG2 output
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_shadow_removed.mp4` - After shadow threshold
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_denoised.mp4` - Final clean mask (with shadow separation)
+- `output/<video_name>/ball_detection/intermediate/cropped_<video>_motion_comparison.mp4` - 2×2 comparison
+
+### Using as a Module
+
+**Phase 1: Lane Detection**
+```python
+from src.lane_detection import LaneDetector, config
+
+# Create detector instance
+detector = LaneDetector('path/to/video.mp4', config)
+
+# Run complete detection pipeline
+boundaries, intersections = detector.detect_all()
+```
+
+**Phase 2: Integrated Ball Detection (Tracking-by-Detection Architecture)**
+```python
+from src.ball_detection.main import run_integrated_tracking
+from src.ball_detection import config
+
+# Run complete integrated pipeline (Stages B+C+D+E)
+# Returns: list of tracking results with detections, predictions, ROI info
+tracking_results = run_integrated_tracking('video.mp4', config)
+
+# Each result contains:
+# - detection: {center, radius, ...} or None
+# - prediction: {x, y, vx, vy} or None (from Kalman)
+# - mode: 'global' or 'local'
+# - search_type: 'initial' or 'reactivation' (if global)
+# - roi_box: (x1, y1, x2, y2) or None
+# - all_candidates: List of all validated candidates from Stage D
+# - last_known_y: Y position when ball last seen (for reactivation)
+```
+
+**Phase 2: Stage B Motion Detection (Legacy)**
+```python
+from src.ball_detection.mask_video import create_masked_lane_video
+from src.ball_detection.motion_detection import apply_background_subtraction
+from src.ball_detection import config
+
+# Get masked frames generator
+frames_gen = create_masked_lane_video('video.mp4', config, save_video=False)
+
+# Apply motion detection (MOG2 + shadow removal + shadow separation + denoising)
+motion_gen = apply_background_subtraction(frames_gen, config, save_videos=False)
+
+# Process each denoised frame
+for frame_idx, denoised_mask, metadata, intermediate_masks in motion_gen:
+    # denoised_mask is the clean binary mask (ball = white, background = black)
+    # Find ball contours and extract position
+    ball_position = detect_ball_from_mask(denoised_mask)
+    trajectory.append(ball_position)
+```
+
+---
+
+## Architecture Deep Dive
+
+### Tracking-by-Detection (Stage C+D+E Integration)
+
+**The Problem We Solved:**
+Original implementation violated the Tracking-by-Detection principle by filtering candidates AFTER using them for Kalman updates. This meant:
+- Kalman filter received raw motion detections (including noise, shadows, bowler's hand)
+- Predictions became unreliable, causing drift
+- ROI box could follow false detections
+
+**Correct Architecture:**
+```
+Stage B (Motion) → Stage D (Filter ALL full-frame) → Stage C (Select based on state) → Stage E (Update Kalman)
+```
+
+**Key Principles:**
+1. **Filter First**: Stage D validates ALL candidates on full frame (independent of tracking state)
+2. **Select Smart**: Stage C chooses best candidate based on tracking mode (global vs local)
+3. **Track Last**: Stage E updates Kalman ONLY with validated candidates
+
+**Implementation Details:**
+
+**Stage D - Blob Analysis (Full Frame Filtering)**
+- Runs on complete frame regardless of tracking state
+- Geometric validation: circularity ≥ 0.70, aspect ratio ≤ 1.8
+- Size filtering: perspective-aware (larger near foul, smaller near pins)
+- Returns: List of ALL validated candidates
+
+**Stage C - Selection Strategy (State-Based)**
+
+*Global Search Type 1 (Initial):*
+- When: First detection or after timeout reset
+- Strategy: Exclude upper 30% (foul line exclusion factor)
+- Selection: Candidate with highest Y (closest to foul line)
+- Purpose: Detect ball near bowler without detecting bowler's head
+
+*Global Search Type 2 (Reactivation):*
+- When: Confirmed ball lost mid-lane
+- Strategy: Search Y < last_known_y + 50px (search ABOVE toward pins)
+  - ⚠️ CRITICAL FIX: Changed from `Y > last_y - 50` to `Y < last_y + 50`
+  - Correctly searches toward pins (smaller Y values in image coordinates)
+  - Prevents false detections in bowler's hand area below last position
+- Selection: Closest to last known position
+- Purpose: Prevent re-detecting bowler when ball already at pins
+- Timeout: Reset to initial search after 100 frames without detection
+
+*Local Tracking:*
+- When: Ball actively tracked
+- Strategy: Filter candidates to ROI around Kalman prediction
+- ROI Size: B = max(30px, 0.15 × y_ball) - perspective-aware scaling
+- Selection: Closest to Kalman prediction
+- Fallback: Switch to global reactivation after MAX_LOST_FRAMES (2 frames)
+
+**Stage E - Kalman Filter Update**
+- Only updates with validated candidates from Stage D
+- 4-state filter: x, y, vx, vy
+- Prediction used for ROI calculation in local mode
+- Never uses raw motion detections
+
+### Bug Fixes Implemented
+
+**1. Reactivation Search Direction (CRITICAL)**
+- **Problem**: Searched Y < last_y + margin (toward foul line/bowler)
+- **Fix**: Changed to Y > last_y - margin (toward pins)
+- **Impact**: System no longer re-detects bowler after ball passes mid-lane
+
+**2. Shadow Interference**
+- **Problem**: Ball+shadow merged into irregular blob, or shadow detected as separate candidate
+- **Fix**: 
+  - Stage B: Added erosion-based separation (2 iterations before morphological opening)
+  - Stage D: Strengthened filters (circularity 0.65→0.70, aspect ratio 2.0→1.8)
+- **Impact**: Multi-layer defense prevents shadow false positives
+
+**3. Visualization Inaccuracy**
+- **Problem**: Reactivation zone shown at current detection position (middle of frame) instead of actual last_known_y
+- **Fix**: Added last_known_y to result dict, visualization uses actual tracker state
+- **Impact**: Debugging videos now show correct search boundaries
+
+**4. Kalman Drift Prevention**
+- **Problem**: MAX_LOST_FRAMES=5 allowed prediction to drift backward when ball disappeared at pins
+- **Fix**: Reduced to MAX_LOST_FRAMES=2
+- **Impact**: Quick transition from LOCAL→GLOBAL prevents ROI from following drifted predictions
+
+**5. Last Known Position Reset**
+- **Problem**: last_known_y reset to None when unconfirmed tracking failed, causing stale visualization values
+- **Fix**: Only reset last_known_y during initialization and timeout, preserve for reactivation
+- **Impact**: Reactivation search always uses most recent ball position
+
+### Configuration Parameters
+
+**Key parameters in [config.py](src/ball_detection/config.py):**
 
 ```python
-from src.lane_detection import (
-    detect_horizontal_line,
-    detect_vertical_boundaries_approach1,
-    compute_master_line_from_collection
-)
+# Reactivation Search
+REACTIVATION_SEARCH_MARGIN = 50      # Search 50px above last Y
+FOUL_LINE_EXCLUSION_FACTOR = 0.3    # Exclude upper 30% in initial search
+REACTIVATION_TIMEOUT = 60            # Reset to full frame after 60 frames
+MAX_LOST_FRAMES = 2                  # Quick switch to prevent Kalman drift
 
-# Your code here...
+# Stage D Filters
+CIRCULARITY_THRESHOLD = 0.70         # Reject irregular shapes (shadows)
+ASPECT_RATIO_MAX = 1.8               # Reject elongated shadows
+USE_SHADOW_SEPARATION = True         # Enable erosion-based separation
+SHADOW_SEPARATION_ITERATIONS = 2     # Erosion iterations
+
+# Stage B Motion Detection
+MOG2_HISTORY = 500                   # Background learning frames
+MOG2_VAR_THRESHOLD = 40              # Variance threshold
+SHADOW_THRESHOLD = 200               # Binary threshold for shadow removal
+
+# Stage C+E Tracking
+CONFIRMATION_THRESHOLD = 20          # Frames to confirm ball
+SPATIAL_CONFIRMATION_DISTANCE = 240  # Pixels traveled for confirmation
+K_SCALE = 0.15                       # ROI scale factor: B = k × y_ball
+B_MIN = 30                           # Minimum ROI size at pins
 ```
 
 ### Output Files
@@ -212,6 +583,11 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 - **[FIXES.md](docs/FIXES.md)** - Bug fixes and implementation improvements
 - **[PERSPECTIVE_GUIDE.md](docs/PERSPECTIVE_GUIDE.md)** - Perspective correction techniques
 - **[WHATS_NEW.md](docs/WHATS_NEW.md)** - Version history and changes
+
+### Phase 1: Lane Detection
+
+- **[LANE_DETECTOR_GUIDE.md](docs/lane_detection/LANE_DETECTOR_GUIDE.md)** - LaneDetector class usage and architecture
+- **[REFACTOR_SUMMARY.md](docs/lane_detection/REFACTOR_SUMMARY.md)** - Phase 1 refactoring details
 
 ---
 
