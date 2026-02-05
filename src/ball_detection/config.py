@@ -204,7 +204,7 @@ STOP_THRESHOLD_PCT = -0.03                   # Stop when Y ≤ (top_boundary + S
                                              # Example: If top=130, height=954, stop at Y≤111 (130 - 19)
 
 # Trajectory Interpolation using Kalman Filter predictions
-INTERPOLATE_TO_BOUNDARY = True               # Extend trajectory beyond last detection using Kalman
+INTERPOLATE_TO_BOUNDARY = False               # Extend trajectory beyond last detection using Kalman
 NUM_KALMAN_PREDICTIONS_AFTER_STOP = 5        # Number of Kalman predictions to collect after stopping
                                              # These predictions simulate future ball positions
 MARK_INTERPOLATED_POINTS = True              # Visual distinction in plots (dashed line)
@@ -221,13 +221,15 @@ INTERPOLATION_COLOR = (0, 165, 255)          # Orange for interpolated trajector
 # ----- Stage G1: Trajectory Processing -----
 # Moving median filter parameters
 MEDIAN_WINDOW = 5  # Window size for moving median filter (must be odd, removes spikes)
+MEDFILT_KERNEL = 3  # Kernel size for scipy medfilt (applied before interpolation)
 
 # MAD outlier detection parameters
-MAD_THRESHOLD = 3.5  # Modified Z-score threshold (3.5 = conservative, 2.5 = aggressive)
+ROLLING_WINDOW_SIZE = 3  # Window size for rolling median MAD (local context, smaller = more sensitive)
+MAD_THRESHOLD = 2.0  # Modified Z-score threshold (lower = more aggressive outlier removal)
 
 # Savitzky-Golay smoothing parameters
 SAVGOL_WINDOW = 45  # Window length for final smoothing (must be odd)
-SAVGOL_POLYORDER = 2  # Polynomial order (2 or 3 recommended)
+SAVGOL_POLYORDER = 3  # Polynomial order (2 or 3 recommended)
 
 # ----- Stage G2: Trajectory Reconstruction -----
 # Template configuration

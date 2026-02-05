@@ -21,10 +21,11 @@ import numpy as np
 import pandas as pd
 import cv2
 from pathlib import Path
-from scipy.signal import savgol_filter
+from scipy.signal import savgol_filter, medfilt
 import json
 import matplotlib.pyplot as plt
 from typing import Tuple, Optional, Dict, Any
+from collections import deque
 
 # Import configuration
 try:
@@ -38,16 +39,17 @@ class TrajectoryProcessor:
     Stage 1: Process and clean raw trajectory data.
     
     Pipeline:
-    1. Moving median filter - Remove spikes and noise
-    2. MAD outlier detection - Detect and remove outliers
-    3. Cubic interpolation - Fill gaps from outlier removal
+    1. Rolling median MAD outlier detection - Remove outliers using local context
+    2. Median filter (medfilt) - Smooth before interpolation
+    3. Linear interpolation - Fill gaps from outlier removal
     4. Savitzky-Golay smoothing - Final smoothing
     """
     
     def __init__(
         self,
-        median_window: int = None,
+        rolling_window_size: int = None,
         mad_threshold: float = None,
+        medfilt_kernel: int = None,
         savgol_window: int = None,
         savgol_polyorder: int = None
     ):
@@ -55,50 +57,65 @@ class TrajectoryProcessor:
         Initialize trajectory processor with processing parameters.
         
         Args:
-            median_window: Window size for moving median filter (must be odd). Uses config if None.
+            rolling_window_size: Window size for rolling median MAD (local context). Uses config if None.
             mad_threshold: Modified Z-score threshold for outlier detection. Uses config if None.
+            medfilt_kernel: Kernel size for scipy medfilt smoothing. Uses config if None.
             savgol_window: Window length for Savitzky-Golay filter (must be odd). Uses config if None.
             savgol_polyorder: Polynomial order for Savitzky-Golay filter. Uses config if None.
         """
         # Use config defaults if not provided
-        self.median_window = median_window if median_window is not None else config.MEDIAN_WINDOW
+        self.rolling_window_size = rolling_window_size if rolling_window_size is not None else config.ROLLING_WINDOW_SIZE
         self.mad_threshold = mad_threshold if mad_threshold is not None else config.MAD_THRESHOLD
+        self.medfilt_kernel = medfilt_kernel if medfilt_kernel is not None else config.MEDFILT_KERNEL
         self.savgol_window = savgol_window if savgol_window is not None else config.SAVGOL_WINDOW
         self.savgol_polyorder = savgol_polyorder if savgol_polyorder is not None else config.SAVGOL_POLYORDER
         
         # Ensure odd windows
-        self.median_window = self.median_window if self.median_window % 2 == 1 else self.median_window + 1
+        self.medfilt_kernel = self.medfilt_kernel if self.medfilt_kernel % 2 == 1 else self.medfilt_kernel + 1
         self.savgol_window = self.savgol_window if self.savgol_window % 2 == 1 else self.savgol_window + 1
     
     @staticmethod
-    def moving_median_filter(data: np.ndarray, window_size: int = 5) -> np.ndarray:
+    def rolling_median_mad(x_values: np.ndarray, y_values: np.ndarray, window_size: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Apply moving median filter to 1D data.
+        Compute rolling median and MAD using a sliding window for local context.
         
         Args:
-            data: Input 1D array
-            window_size: Size of the median window (must be odd)
+            x_values: X coordinate values
+            y_values: Y coordinate values
+            window_size: Size of the rolling window
         
         Returns:
-            Filtered data
+            Tuple of (x_median, y_median, distances) where distances is Euclidean distance from rolling median
         """
-        if window_size % 2 == 0:
-            window_size += 1
+        x_median = []
+        y_median = []
         
-        filtered = np.copy(data)
-        half_window = window_size // 2
+        x_window = deque(maxlen=window_size)
+        y_window = deque(maxlen=window_size)
         
-        for i in range(len(data)):
-            start_idx = max(0, i - half_window)
-            end_idx = min(len(data), i + half_window + 1)
-            filtered[i] = np.nanmedian(data[start_idx:end_idx])
+        for x, y in zip(x_values, y_values):
+            x_window.append(x)
+            y_window.append(y)
+            
+            # Compute median even if window isn't full (use available points)
+            x_med = np.median(list(x_window))
+            y_med = np.median(list(y_window))
+            x_median.append(x_med)
+            y_median.append(y_med)
         
-        return filtered
+        x_median = np.array(x_median)
+        y_median = np.array(y_median)
+        
+        # Compute Euclidean distances from rolling median
+        distances = np.sqrt((x_values - x_median) ** 2 + (y_values - y_median) ** 2)
+        
+        return x_median, y_median, distances
     
     @staticmethod
     def modified_zscore_mad(data: np.ndarray, threshold: float = 3.5) -> np.ndarray:
         """
         Detect outliers using Modified Z-score based on Median Absolute Deviation (MAD).
+        Uses global statistics on the data.
         
         Args:
             data: Input data
@@ -126,7 +143,7 @@ class TrajectoryProcessor:
         return_intermediate: bool = False
     ) -> Tuple[pd.DataFrame, pd.DataFrame] | Tuple[pd.DataFrame, pd.DataFrame, Dict[str, pd.DataFrame]]:
         """
-        Complete trajectory processing pipeline.
+        Complete trajectory processing pipeline using rolling median MAD.
         
         Args:
             df: DataFrame with 'frame', 'x', 'y' columns
@@ -142,7 +159,7 @@ class TrajectoryProcessor:
             If return_intermediate=True:
                 Tuple of (cleaned_df, final_df, intermediate_dict) where intermediate_dict contains:
                 - 'raw': Original data
-                - 'after_median': After median filter applied
+                - 'after_median': After median filter applied (now done after outlier removal)
                 - 'outlier_mask': Boolean mask of detected outliers
                 - 'after_interpolation': After interpolation, before Savitzky-Golay
         """
@@ -155,61 +172,72 @@ class TrajectoryProcessor:
         if verbose:
             print(f"  Original points: {len(result_df)}")
         
-        # Step 1: Moving median filter
-        result_df['x'] = self.moving_median_filter(result_df['x'].values, self.median_window)
-        result_df['y'] = self.moving_median_filter(result_df['y'].values, self.median_window)
-        if verbose:
-            print(f"  ✓ Applied moving median filter (window={self.median_window})")
+        # Step 1: Rolling median MAD outlier detection (using Euclidean distance)
+        x_median, y_median, distances = self.rolling_median_mad(
+            result_df['x'].values, 
+            result_df['y'].values, 
+            self.rolling_window_size
+        )
         
-        if return_intermediate:
-            intermediate['after_median'] = result_df.copy()
+        # Compute modified z-scores on the distances
+        median_dist = np.nanmedian(distances)
+        mad_dist = np.nanmedian(np.abs(distances - median_dist))
         
-        # Step 2: MAD outlier detection
-        outliers_x = self.modified_zscore_mad(result_df['x'].values, self.mad_threshold)
-        outliers_y = self.modified_zscore_mad(result_df['y'].values, self.mad_threshold)
-        outliers = outliers_x | outliers_y
+        if mad_dist == 0:
+            outliers = np.zeros(len(result_df), dtype=bool)
+        else:
+            modified_z_scores = 0.6745 * (distances - median_dist) / mad_dist
+            outliers = np.abs(modified_z_scores) > self.mad_threshold  # Points with high modified z-scores are outliers
+        
         num_outliers = np.sum(outliers)
         if verbose:
-            print(f"  ✓ Detected outliers: {num_outliers} ({100*num_outliers/len(result_df):.2f}%)")
+            print(f"  ✓ Detected outliers (rolling MAD): {num_outliers} ({100*num_outliers/len(result_df):.2f}%)")
         
         if return_intermediate:
             intermediate['outlier_mask'] = outliers
         
-        # Step 3: Remove outliers
+        # Step 2: Remove outliers
         result_df.loc[outliers, 'x'] = np.nan
         result_df.loc[outliers, 'y'] = np.nan
         cleaned_df = result_df.copy()
         
-        # Step 4: Interpolate missing values
-        try:
-            result_df['x'] = result_df['x'].interpolate(method='cubic', limit_direction='both').ffill().bfill()
-            result_df['y'] = result_df['y'].interpolate(method='cubic', limit_direction='both').ffill().bfill()
+        # Step 3: Apply median filter (scipy medfilt) to smooth valid points only
+        valid_mask = ~result_df[['x', 'y']].isna().any(axis=1)
+        if valid_mask.sum() > self.medfilt_kernel:
+            result_df.loc[valid_mask, 'x'] = medfilt(result_df.loc[valid_mask, 'x'].values, kernel_size=self.medfilt_kernel)
+            result_df.loc[valid_mask, 'y'] = medfilt(result_df.loc[valid_mask, 'y'].values, kernel_size=self.medfilt_kernel)
             if verbose:
-                print(f"  ✓ Interpolated missing values (cubic)")
-        except:
-            result_df['x'] = result_df['x'].interpolate(method='linear', limit_direction='both').ffill().bfill()
-            result_df['y'] = result_df['y'].interpolate(method='linear', limit_direction='both').ffill().bfill()
+                print(f"  ✓ Applied median filter (kernel={self.medfilt_kernel})")
+        
+        if return_intermediate:
+            intermediate['after_median'] = result_df.copy()
+        
+        # Step 4: Savitzky-Golay smoothing on valid points only (before interpolation)
+        valid_mask = ~result_df[['x', 'y']].isna().any(axis=1)
+        if valid_mask.sum() >= self.savgol_window:
+            result_df.loc[valid_mask, 'x'] = savgol_filter(
+                result_df.loc[valid_mask, 'x'].values,
+                window_length=self.savgol_window,
+                polyorder=self.savgol_polyorder
+            )
+            result_df.loc[valid_mask, 'y'] = savgol_filter(
+                result_df.loc[valid_mask, 'y'].values,
+                window_length=self.savgol_window,
+                polyorder=self.savgol_polyorder
+            )
             if verbose:
-                print(f"  ✓ Interpolated missing values (linear - cubic failed)")
+                print(f"  ✓ Applied Savitzky-Golay smoothing (window={self.savgol_window}, poly={self.savgol_polyorder})")
+        
+        # Step 5: Linear interpolation to fill gaps (after smoothing)
+        result_df['x'] = result_df['x'].interpolate(method='linear', limit_direction='both').ffill().bfill()
+        result_df['y'] = result_df['y'].interpolate(method='linear', limit_direction='both').ffill().bfill()
+        if verbose:
+            print(f"  ✓ Interpolated missing values (linear)")
         
         if return_intermediate:
             intermediate['after_interpolation'] = result_df.copy()
         
-        # Step 5: Savitzky-Golay smoothing
-        result_df['x'] = savgol_filter(
-            result_df['x'],
-            window_length=self.savgol_window,
-            polyorder=self.savgol_polyorder
-        )
-        result_df['y'] = savgol_filter(
-            result_df['y'],
-            window_length=self.savgol_window,
-            polyorder=self.savgol_polyorder
-        )
-        if verbose:
-            print(f"  ✓ Applied Savitzky-Golay smoothing (window={self.savgol_window}, poly={self.savgol_polyorder})")
-        
-        # Round to integers
+        # Step 6: Round to integers
         result_df['x'] = result_df['x'].round().astype(int)
         result_df['y'] = result_df['y'].round().astype(int)
         

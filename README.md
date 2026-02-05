@@ -263,28 +263,36 @@ bowling-cv/
       - Trajectory plots on original and overhead views
   
   - ✅ **Stage G: Post-Processing (Trajectory Cleaning & Reconstruction)**
-    - **Stage G1: Trajectory Processing**
-      - Moving median filter (window=5) - removes spikes and noise
-      - MAD outlier detection (threshold=3.5) - statistical outlier removal
-      - Cubic interpolation - fills gaps from outlier removal
-      - Savitzky-Golay smoothing (window=45, poly=2) - final smoothing
+    - **Stage G1: Trajectory Processing** (Updated Feb 5, 2026)
+      - **Rolling Median MAD outlier detection** (window=3) - local context-aware outlier removal using Euclidean distance
+      - **Median filter** (kernel=3) - scipy.medfilt smoothing on valid points
+      - **Savitzky-Golay smoothing** (window=45, poly=3) - applied BEFORE interpolation
+      - **Linear interpolation** - fills gaps AFTER smoothing valid data points
+      - **Improved approach**: Smooths real data first, then interpolates (vs old: interpolate then smooth)
     - **Stage G2: Template Reconstruction**
       - Boundary filtering (removes points outside valid lane area)
       - Coordinate scaling from homography space to template space
-      - Resolution smoothing (window=15, poly=3) - removes pixelation artifacts
+      - Resolution smoothing (window=31, poly=2) - removes pixelation artifacts
       - Float precision maintained throughout pipeline for smooth trajectories
     - **Output Files**:
       - `trajectory_processed_original.csv` - cleaned trajectory in original (perspective) coordinates
       - `trajectory_processed_overhead.csv` - cleaned trajectory in overhead (homography) coordinates
       - `trajectory_reconstructed.csv` - final trajectory on lane template
-    - **Validation Visualizations**:
-      - `trajectory_processing_original.png` - Original coordinate cleaning plots
-      - `trajectory_processing_overhead.png` - Overhead coordinate cleaning plots
+    - **Validation Visualizations** (10 PNG plots + 1 MP4):
+      - `trajectory_processing_original.png` - Original coordinate cleaning plots (before/after)
+      - `trajectory_processing_overhead.png` - Overhead coordinate cleaning plots (before/after)
+      - **NEW**: `median_filter_original.png` - Median filter effects on original coordinates
+      - **NEW**: `median_filter_overhead.png` - Median filter effects on overhead coordinates
+      - **NEW**: `mad_outliers_original.png` - Outlier detection visualization for original coordinates
+      - **NEW**: `mad_outliers_overhead.png` - Outlier detection visualization for overhead coordinates
+      - **NEW**: `interpolation_original.png` - Interpolation visualization for original coordinates
+      - **NEW**: `interpolation_overhead.png` - Interpolation visualization for overhead coordinates
       - `radius_processing_visualization.png` - Radius cleaning with RANSAC fit
       - `trajectory_on_template.png` - Final trajectory overlaid on bowling lane template
       - `trajectory_animation.mp4` - Animated video showing trajectory building frame-by-frame
     - Fully integrated into main pipeline as Step 6
     - Configurable via `--skip-postprocess` CLI flag and config.py parameters
+    - All visualization flags individually controllable in config.py
 
 ### 🔄 In Progress (Phase 2 - Advanced Analysis)
 - **Trajectory Analysis & Physics**
