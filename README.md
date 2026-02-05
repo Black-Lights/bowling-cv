@@ -82,6 +82,31 @@ python main.py --video cropped_test3.mp4
 - ✅ Professional class-based architecture (LaneDetector)
 - ✅ Automatic dependency resolution
 
+### Running Complete Ball Detection (Stages B-G Integrated)
+
+```bash
+# Run the complete Phase 2 pipeline (all 6 steps)
+python -m src.ball_detection.main --video cropped_test3.mp4
+
+# Process all configured videos
+python -m src.ball_detection.main
+```
+
+**Output:** 
+- 4 diagnostic videos (candidates, selection, trajectory, debug)
+- Trajectory data JSON (original + overhead coordinates)
+- Trajectory plots (original + overhead views)
+- Processed & reconstructed trajectory CSVs (Stage G)
+- Complete ball tracking from foul line to pins
+
+**Pipeline Steps:**
+1. ✅ Lane masking (4-side boundaries)
+2. ✅ Perspective transformation (overhead view)
+3. ✅ Motion detection (MOG2 background subtraction)
+4. ✅ ROI tracking (legacy visualization)
+5. ✅ Integrated tracking (Stages C+D+E+F: filter → select → track → stop)
+6. ✅ Post-processing (Stage G: cleaning + reconstruction)
+
 ---
 
 ## Project Structure
@@ -253,66 +278,14 @@ bowling-cv/
     - Fully integrated into main pipeline as Step 6
     - Configurable via `--skip-postprocess` CLI flag
 
-### 🔄 In Progress (Phase 2)
+### 🔄 In Progress (Phase 2 - Advanced Analysis)
 - **Trajectory Analysis & Physics**
-  - Velocity and acceleration curves
-  - Path curvature analysis
-  - Impact angle calculations
+  - Velocity and acceleration curves over time
+  - Path curvature analysis for hook detection
+  - Impact angle calculations at pin deck
+  - Ball speed measurements (mph/fps)
   - Comparative analysis across multiple throws
-  - ✅ Vertical lane boundary detection (left & right sides)
-  - ✅ Top boundary detection (pin area) with MSAC line fitting
-  - ✅ Master line computation using voting system
-  - ✅ Perspective-aware angle calculations
-  - ✅ Tracking stability analysis
-  - ✅ Multiple visualization modes
-  - ✅ HSV preprocessing with gap filling
-  - ✅ Robust MSAC (M-estimator SAmple Consensus) fitting
-  - ✅ Complete lane box (all 4 boundaries)
-
-### 🔄 In Progress (Phase 2 - Ball Detection)
-- **Video Masking** ✅ COMPLETE
-  - Reuses Phase 1 lane boundaries
-  - 4-side masking (top, bottom, left, right)
-  - Two modes: video file or frame generator
-  - Memory-efficient frame processing
-  - Foul line area properly excluded (30px cutoff)
-- **2D Homography & Perspective Transformation** ✅ COMPLETE
-  - Direct Linear Transform (DLT) for homography calculation
-  - Perspective transformation to overhead view
-  - Uniform scaling (20 px/in) preserves circular shapes
-  - Auto-crop to remove black borders
-  - High-quality encoding (PNG frames + yuv444p)
-  - Real-world dimensions: 60 ft × 41.5 in bowling lane
-- **Motion Detection (Background Subtraction)** ✅ COMPLETE
-  - MOG2 (Mixture of Gaussians) background subtractor
-  - Shadow removal (threshold grey pixels at 127)
-  - Morphological opening for noise removal (3×3 ellipse kernel)
-  - Intermediate videos: foreground mask, shadow removed, denoised
-  - 2×2 comparison video for debugging
-- **ROI Logic & Tracking (Kalman Filter)** ✅ COMPLETE
-  - Dual-mode tracking: Global Search + Local Tracking
-  - OpenCV Kalman Filter (4-state: x, y, vx, vy)
-  - Perspective-aware dynamic ROI sizing: B_t = max(30px, 0.15 * y_ball)
-  - Global search: prioritizes foul line + negative Y velocity filtering
-  - Local tracking: searches within predicted ROI box
-  - 10-frame timeout before reverting to global search
-  - 6 intermediate videos: global search, local tracking, Kalman predictions, mode comparison, scaling demo, full pipeline
-  - **Confirmation Logic (Problem 2 Solution)**:
-    - Dual confirmation: 20 consecutive frames + 240px travel distance (~12 feet)
-    - Unconfirmed object lost → Full lane search (prevents false restriction if tracking hand)
-    - Confirmed ball lost → Restricted search (y < last_position - 50px buffer)
-    - Physics-informed: ball cannot move back toward camera
-    - Prevents re-detecting ball behind where it was lost
-    - Successfully tested: Frame 109 confirmation, Frame 139 restricted search
-- **Ball Filtering (Blob Analysis)** (Next - Stage D)
-  - Circularity filter (C > 0.65)
-  - Aspect ratio validation (< 2.0)
-  - Size constraints (MIN/MAX radius)
-  - Hand vs. ball discrimination
-- **Trajectory Extraction** (Upcoming)
-  - Ball position time series
-  - Velocity and acceleration analysis
-  - Path smoothing algorithms
+  - Statistical trajectory metrics
 
 ### Planned (Phase 3+)
 - **3D Trajectory Reconstruction**
