@@ -31,7 +31,6 @@ venv.bak/
 files_lat/
 
 # Project tracking
-.project_tracking.md
 .dev_notes.md
 
 # IDE
