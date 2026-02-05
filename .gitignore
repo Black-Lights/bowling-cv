@@ -66,6 +66,10 @@ assets/input/*.mov
 *.tmp
 temp/
 
+# Development convenience scripts (for local testing)
+run_phase1.py
+run_postprocessing.py
+
 # OS
 Thumbs.db
 .DS_Store

@@ -364,7 +364,7 @@ class BallTracker:
         # State management
         self.tracking_active = False
         self.lost_frames = 0
-        self.trajectory = []  # List of (x, y, frame_idx) tuples
+        self.trajectory = []  # List of (x, y, frame_idx, radius) tuples
         
         # NEW: Global search type tracking
         self.search_type = 'initial'  # 'initial' or 'reactivation'
@@ -380,7 +380,7 @@ class BallTracker:
         # Stage F: Stop condition (pin impact)
         self.trajectory_complete = False  # True when ball reaches pin area
         self.stop_frame = None  # Frame number where tracking stopped
-        self.interpolated_points = []  # List of extrapolated (x, y) points
+        self.interpolated_points = []  # List of extrapolated (x, y, radius) points
         self.stop_threshold_y = None  # Calculated in set_boundaries()
         self.top_boundary_y = None  # Loaded from Phase 1 data
         
@@ -436,12 +436,15 @@ class BallTracker:
                 print(f"  Warning: Ball not moving toward pins (vy={vy:.2f}). Skipping Kalman predictions.")
             return
         
+        # Get last known radius from trajectory
+        last_radius = self.trajectory[-1][3] if self.trajectory else 20.0
+        
         # Get number of predictions from config
         num_predictions = getattr(self.config, 'NUM_KALMAN_PREDICTIONS_AFTER_STOP', 5)
         
         if self.config.VERBOSE:
             print(f"  Collecting {num_predictions} Kalman predictions after stop:")
-            print(f"    Last detection: ({last_x:.0f}, {last_y:.0f})")
+            print(f"    Last radius: {last_radius:.1f} pixels")
             print(f"    Initial velocity: vx={vx:.2f}, vy={vy:.2f} px/frame")
         
         # Collect N predictions by running Kalman filter forward without measurements
@@ -450,10 +453,10 @@ class BallTracker:
             # Predict next frame
             prediction = self.kalman.predict()
             
-            # Store prediction
+            # Store prediction (use last known radius for interpolated points)
             pred_x = int(prediction['x'])
             pred_y = int(prediction['y'])
-            predictions.append((pred_x, pred_y))
+            predictions.append((pred_x, pred_y, last_radius))
             
             if self.config.VERBOSE:
                 print(f"    Prediction {i+1}: ({pred_x}, {pred_y})")
@@ -697,7 +700,8 @@ class BallTracker:
                     print(f"  Frame {frame_idx}: Ball detected! Activating local tracking mode")
             
             # Update trajectory and state
-            self.trajectory.append((cx, cy, frame_idx))
+            radius = selected_candidate['radius']
+            self.trajectory.append((cx, cy, frame_idx, radius))
             self.recent_detections.append((cx, cy))
             self.lost_frames = 0
             self.last_known_y = cy  # Update last known position

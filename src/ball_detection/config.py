@@ -199,12 +199,12 @@ SAVE_FULL_BLOB_PIPELINE_VIDEO = True         # 2x3 grid showing all stages
 
 # Stop tracking when ball reaches pin area
 ENABLE_STOP_CONDITION = True                 # Enable automatic stop when near pins
-STOP_THRESHOLD_PCT = -0.05                   # Stop when Y ≤ (top_boundary + STOP_THRESHOLD_PCT * frame_height)
+STOP_THRESHOLD_PCT = -0.03                   # Stop when Y ≤ (top_boundary + STOP_THRESHOLD_PCT * frame_height)
                                              # Negative = stop ABOVE top boundary (toward frame top)
                                              # Example: If top=130, height=954, stop at Y≤111 (130 - 19)
 
 # Trajectory Interpolation using Kalman Filter predictions
-INTERPOLATE_TO_BOUNDARY = True               # Extend trajectory beyond last detection using Kalman
+INTERPOLATE_TO_BOUNDARY = False               # Extend trajectory beyond last detection using Kalman
 NUM_KALMAN_PREDICTIONS_AFTER_STOP = 5        # Number of Kalman predictions to collect after stopping
                                              # These predictions simulate future ball positions
 MARK_INTERPOLATED_POINTS = True              # Visual distinction in plots (dashed line)
@@ -221,13 +221,15 @@ INTERPOLATION_COLOR = (0, 165, 255)          # Orange for interpolated trajector
 # ----- Stage G1: Trajectory Processing -----
 # Moving median filter parameters
 MEDIAN_WINDOW = 5  # Window size for moving median filter (must be odd, removes spikes)
+MEDFILT_KERNEL = 3  # Kernel size for scipy medfilt (applied before interpolation)
 
 # MAD outlier detection parameters
-MAD_THRESHOLD = 3.5  # Modified Z-score threshold (3.5 = conservative, 2.5 = aggressive)
+ROLLING_WINDOW_SIZE = 3  # Window size for rolling median MAD (local context, smaller = more sensitive)
+MAD_THRESHOLD = 2.0  # Modified Z-score threshold (lower = more aggressive outlier removal)
 
 # Savitzky-Golay smoothing parameters
 SAVGOL_WINDOW = 45  # Window length for final smoothing (must be odd)
-SAVGOL_POLYORDER = 2  # Polynomial order (2 or 3 recommended)
+SAVGOL_POLYORDER = 3  # Polynomial order (2 or 3 recommended)
 
 # ----- Stage G2: Trajectory Reconstruction -----
 # Template configuration
@@ -239,13 +241,32 @@ HOMOGRAPHY_WIDTH = 41.5  # Width in inches
 HOMOGRAPHY_HEIGHT = 720  # Height in inches
 
 # Resolution smoothing parameters (removes pixelation after scaling)
-RESOLUTION_SMOOTH_WINDOW = 15  # Window for Savitzky-Golay (removes scaling artifacts)
-RESOLUTION_SMOOTH_POLYORDER = 3  # Polynomial order (higher = smoother curves)
+RESOLUTION_SMOOTH_WINDOW = 30  # Window for Savitzky-Golay (removes scaling artifacts)
+RESOLUTION_SMOOTH_POLYORDER = 2  # Polynomial order (higher = smoother curves)
 
 # Post-processing output
 SAVE_PROCESSED_TRAJECTORY_CSV = True  # Save cleaned trajectory
 SAVE_RECONSTRUCTED_TRAJECTORY_CSV = True  # Save template-space trajectory
-SAVE_POST_PROCESSING_VISUALIZATIONS = False  # Save comparison plots (matplotlib)
+SAVE_POST_PROCESSING_VISUALIZATIONS = True  # Enable all visualization plots
+
+# Individual visualization flags
+SAVE_TRAJECTORY_PROCESSING_ORIGINAL_PLOT = True  # Original coordinates processing plot
+SAVE_TRAJECTORY_PROCESSING_OVERHEAD_PLOT = True  # Overhead coordinates processing plot
+SAVE_RADIUS_PROCESSING_PLOT = True  # Radius model fitting plot
+SAVE_TRAJECTORY_ON_TEMPLATE_PLOT = True  # Static trajectory overlay on template
+SAVE_TRAJECTORY_ANIMATION_VIDEO = True  # Animated video showing trajectory frame-by-frame
+
+# Intermediate processing step visualizations
+SAVE_MEDIAN_FILTER_PLOT = True  # Show before/after median filter application
+SAVE_MAD_OUTLIER_PLOT = True  # Show detected outliers using MAD method
+SAVE_INTERPOLATION_PLOT = True  # Show interpolation of missing values
+
+# Video animation parameters
+ANIMATION_FPS = 30  # Frames per second for trajectory animation video
+ANIMATION_POINT_SIZE = 40  # Size of current ball marker
+ANIMATION_LINE_WIDTH = 3  # Width of trajectory line
+ANIMATION_TRAIL_LENGTH = 0  # Unused (trajectory always grows from start)
+ANIMATION_FRAME_REPEAT = 3  # Repeat each frame N times to slow down the animation
 
 # ============================================
 # DEBUG & LOGGING

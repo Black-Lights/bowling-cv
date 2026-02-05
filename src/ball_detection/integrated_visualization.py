@@ -265,20 +265,23 @@ def generate_integrated_tracking_videos(video_name, frames, masks, tracking_resu
         if interpolated_added and result.get('interpolated_points'):
             last_real = trajectory_points[-1]
             for interp_point in result['interpolated_points']:
+                # Extract x, y from 3-tuple (x, y, frame_idx)
+                interp_x, interp_y = int(interp_point[0]), int(interp_point[1])
+                
                 # Dashed line from last real to interpolated
                 num_dashes = 10
                 for j in range(num_dashes):
                     t1 = j / num_dashes
                     t2 = (j + 0.5) / num_dashes
-                    x1 = int(last_real[0] + t1 * (interp_point[0] - last_real[0]))
-                    y1 = int(last_real[1] + t1 * (interp_point[1] - last_real[1]))
-                    x2 = int(last_real[0] + t2 * (interp_point[0] - last_real[0]))
-                    y2 = int(last_real[1] + t2 * (interp_point[1] - last_real[1]))
+                    x1 = int(last_real[0] + t1 * (interp_x - last_real[0]))
+                    y1 = int(last_real[1] + t1 * (interp_y - last_real[1]))
+                    x2 = int(last_real[0] + t2 * (interp_x - last_real[0]))
+                    y2 = int(last_real[1] + t2 * (interp_y - last_real[1]))
                     cv2.line(vis, (x1, y1), (x2, y2), config.INTERPOLATION_COLOR, 2)
                 
                 # Mark interpolated endpoint
-                cv2.circle(vis, interp_point, 6, config.INTERPOLATION_COLOR, -1)
-                cv2.putText(vis, "Extrapolated", (interp_point[0] + 10, interp_point[1]),
+                cv2.circle(vis, (interp_x, interp_y), 6, config.INTERPOLATION_COLOR, -1)
+                cv2.putText(vis, "Extrapolated", (interp_x + 10, interp_y),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, config.INTERPOLATION_COLOR, 2)
         
         # Draw current position
