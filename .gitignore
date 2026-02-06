@@ -69,6 +69,8 @@ temp/
 # Development convenience scripts (for local testing)
 run_phase1.py
 run_postprocessing.py
+run_spin_analysis.py
+validate_coordinates.py
 
 # OS
 Thumbs.db

@@ -57,19 +57,20 @@ def main():
 Examples:
   python main.py                           # Run all phases on all videos
   python main.py --phase 1                 # Run only Phase 1 (lane detection)
-  python main.py --phase 2 --phase 4       # Run Phase 2 and 4
+  python main.py --phase 2 --phase 3       # Run Phase 2 and 3 (ball + spin)
   python main.py --video cropped_test3.mp4 # Process single video (all phases)
-  python main.py --video test3.mp4 --phase 2  # Single video, Phase 2 only
+  python main.py --video test3.mp4 --phase 3  # Single video, Phase 3 only
 
 Individual Module Entry Points:
   python -m src.lane_detection.main --video cropped_test3.mp4
   python -m src.ball_detection.main --video cropped_test3.mp4
+  python -m src.spin_analysis.main --video cropped_test3.mp4
   python -m src.pin_detection.main --video cropped_test3.mp4
         """
     )
     parser.add_argument('--video', type=str, 
                         help='Process single video file (default: process all configured videos)')
-    parser.add_argument('--phase', type=int, action='append', choices=[1, 2, 4],
+    parser.add_argument('--phase', type=int, action='append', choices=[1, 2, 3, 4],
                         help='Run specific phase(s). Can be specified multiple times. Default: run all phases')
     args = parser.parse_args()
     
@@ -77,7 +78,7 @@ Individual Module Entry Points:
     if args.phase:
         phases = sorted(set(args.phase))  # Remove duplicates and sort
     else:
-        phases = [1, 2, 4]  # Run all phases by default
+        phases = [1, 2, 3, 4]  # Run all phases by default
     
     # Determine which videos to process
     videos = [args.video] if args.video else None
@@ -98,6 +99,8 @@ Individual Module Entry Points:
             run_phase_1(videos)
         elif phase == 2:
             run_phase_2(videos)
+        elif phase == 3:
+            run_phase_3(videos)
         elif phase == 4:
             run_phase_4(videos)
     
@@ -162,6 +165,35 @@ def run_phase_2(videos=None):
     sys.argv = args
     try:
         ball_main()
+    finally:
+        sys.argv = original_argv
+
+
+def run_phase_3(videos=None):
+    """
+    Run Phase 3: Spin Analysis
+    
+    Parameters:
+    -----------
+    videos : list, optional
+        List of video files to process. If None, uses configured videos.
+    """
+    print(f"\n{'='*80}")
+    print(f"PHASE 3: SPIN ANALYSIS")
+    print(f"{'='*80}\n")
+    
+    from spin_analysis.main import main as spin_main
+    import sys
+    
+    # Build command line arguments
+    original_argv = sys.argv
+    args = ['main.py']
+    if videos:
+        args.extend(['--video', videos[0]])  # Spin analysis processes one video at a time
+    
+    sys.argv = args
+    try:
+        spin_main()
     finally:
         sys.argv = original_argv
 
