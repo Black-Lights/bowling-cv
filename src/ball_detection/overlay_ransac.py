@@ -28,19 +28,24 @@ from ball_detection.post_processing import create_ball_overlay_video
 
 def generate_ransac_overlay(video_path: str, config) -> dict:
     """
-    Generate RANSAC fitted radius overlay video for the specified video.
+    Generate overlay videos based on config flags for different radius sources.
     
-    Creates overlay video with:
-    - Yellow circles showing RANSAC fitted radius (exponential decay model)
+    Creates overlay video(s) with:
+    - Yellow circles showing ball radius (source depends on flags)
     - Magenta trajectory path showing ball movement
     - Frame information with radius values
+    
+    Generates up to 3 videos based on config flags:
+    - RANSAC fitted radius (exponential decay model)
+    - Cleaned measured radius (after MAD outlier removal)
+    - Raw measured radius (original detections)
     
     Args:
         video_path (str): Path to input video file
         config: Configuration module with settings
     
     Returns:
-        dict: Results with output_path and metadata
+        dict: Results with output_paths and metadata
         
     Raises:
         FileNotFoundError: If video or trajectory CSV not found
@@ -67,41 +72,95 @@ def generate_ransac_overlay(video_path: str, config) -> dict:
     
     if config.VERBOSE:
         print(f"\n{'='*80}")
-        print(f"Generating RANSAC Overlay Video")
+        print(f"Generating Overlay Videos - Stage H")
         print(f"Video: {video_name}")
         print(f"{'='*80}\n")
     
-    # Generate overlay video using RANSAC fitted radius
-    create_ball_overlay_video(
-        video_path=str(video_path),
-        trajectory_csv_path=str(trajectory_csv_path),
-        output_path=output_dir,
-        fps=config.OVERLAY_FPS,
-        circle_color=config.OVERLAY_CIRCLE_COLOR,
-        trajectory_color=config.OVERLAY_TRAJECTORY_COLOR,
-        line_width=config.OVERLAY_LINE_WIDTH,
-        radius_source=config.OVERLAY_RADIUS_SOURCE,
-        verbose=config.VERBOSE
-    )
-    
-    output_file = output_dir / "ball_tracking_overlay_ransac.mp4"
-    
-    if config.VERBOSE:
-        print(f"✓ RANSAC overlay video generated")
-        print(f"  Output: {output_file}")
-    
-    return {
-        'output_path': str(output_file),
+    results = {
         'video_name': video_name,
-        'radius_source': 'RANSAC fitted'
+        'output_paths': []
     }
+    
+    # Generate RANSAC fitted radius overlay
+    if config.SAVE_OVERLAY_RANSAC_FITTED:
+        if config.VERBOSE:
+            print(f"Generating RANSAC fitted radius overlay...")
+        
+        create_ball_overlay_video(
+            video_path=str(video_path),
+            trajectory_csv_path=str(trajectory_csv_path),
+            output_path=output_dir,
+            fps=config.OVERLAY_FPS,
+            circle_color=config.OVERLAY_CIRCLE_COLOR,
+            trajectory_color=config.OVERLAY_TRAJECTORY_COLOR,
+            line_width=config.OVERLAY_LINE_WIDTH,
+            radius_source="fitted",
+            verbose=config.VERBOSE
+        )
+        
+        output_file = output_dir / "ball_tracking_overlay_ransac.mp4"
+        results['output_paths'].append(str(output_file))
+        
+        if config.VERBOSE:
+            print(f"  ✓ RANSAC fitted: {output_file.name}")
+    
+    # Generate cleaned measured radius overlay
+    if config.SAVE_OVERLAY_MEASURED_CLEANED:
+        if config.VERBOSE:
+            print(f"Generating cleaned measured radius overlay...")
+        
+        create_ball_overlay_video(
+            video_path=str(video_path),
+            trajectory_csv_path=str(trajectory_csv_path),
+            output_path=output_dir,
+            fps=config.OVERLAY_FPS,
+            circle_color=config.OVERLAY_CIRCLE_COLOR,
+            trajectory_color=config.OVERLAY_TRAJECTORY_COLOR,
+            line_width=config.OVERLAY_LINE_WIDTH,
+            radius_source="measured",
+            verbose=config.VERBOSE
+        )
+        
+        output_file = output_dir / "ball_tracking_overlay_measured_cleaned.mp4"
+        results['output_paths'].append(str(output_file))
+        
+        if config.VERBOSE:
+            print(f"  ✓ Cleaned measured: {output_file.name}")
+    
+    # Generate raw measured radius overlay
+    if config.SAVE_OVERLAY_MEASURED_RAW:
+        if config.VERBOSE:
+            print(f"Generating raw measured radius overlay...")
+        
+        create_ball_overlay_video(
+            video_path=str(video_path),
+            trajectory_csv_path=str(trajectory_csv_path),
+            output_path=output_dir,
+            fps=config.OVERLAY_FPS,
+            circle_color=config.OVERLAY_CIRCLE_COLOR,
+            trajectory_color=config.OVERLAY_TRAJECTORY_COLOR,
+            line_width=config.OVERLAY_LINE_WIDTH,
+            radius_source="raw",
+            verbose=config.VERBOSE
+        )
+        
+        output_file = output_dir / "ball_tracking_overlay_measured_raw.mp4"
+        results['output_paths'].append(str(output_file))
+        
+        if config.VERBOSE:
+            print(f"  ✓ Raw measured: {output_file.name}")
+    
+    if config.VERBOSE and results['output_paths']:
+        print(f"\n✓ Generated {len(results['output_paths'])} overlay video(s)")
+    
+    return results
 
 
 def main():
     """
     Main entry point for command-line usage.
     
-    Generates RANSAC overlay video for specified input video.
+    Generates overlay video(s) for specified input video based on config flags.
     """
     if len(sys.argv) < 2:
         print("Usage: python -m src.ball_detection.overlay_ransac <video_file>")
@@ -111,18 +170,29 @@ def main():
     
     video_file = sys.argv[1]
     
+    # Build list of enabled overlay types
+    overlay_types = []
+    if config.SAVE_OVERLAY_RANSAC_FITTED:
+        overlay_types.append('RANSAC Fitted')
+    if config.SAVE_OVERLAY_MEASURED_CLEANED:
+        overlay_types.append('Cleaned Measured')
+    if config.SAVE_OVERLAY_MEASURED_RAW:
+        overlay_types.append('Raw Measured')
+    
     print(f"\n{'#'*80}")
-    print(f"# RANSAC OVERLAY VIDEO GENERATION")
-    print(f"# Radius Source: RANSAC Fitted Exponential Model")
+    print(f"# STAGE H: OVERLAY VIDEO GENERATION")
+    print(f"# Radius Sources: {', '.join(overlay_types) if overlay_types else 'None'}")
     print(f"{'#'*80}\n")
     
     try:
         result = generate_ransac_overlay(video_file, config)
         
         print(f"\n{'='*80}")
-        print(f"✓ RANSAC OVERLAY VIDEO GENERATION COMPLETE!")
+        print(f"✓ STAGE H: OVERLAY VIDEO GENERATION COMPLETE!")
         print(f"{'='*80}")
-        print(f"Output: {result['output_path']}")
+        print(f"Generated {len(result['output_paths'])} overlay video(s):")
+        for path in result['output_paths']:
+            print(f"  - {Path(path).name}")
         print(f"{'='*80}\n")
         
     except Exception as e:
