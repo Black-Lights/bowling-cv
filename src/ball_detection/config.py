@@ -225,7 +225,7 @@ MEDFILT_KERNEL = 3  # Kernel size for scipy medfilt (applied before interpolatio
 
 # MAD outlier detection parameters
 ROLLING_WINDOW_SIZE = 3  # Window size for rolling median MAD (local context, smaller = more sensitive)
-MAD_THRESHOLD = 2.0  # Modified Z-score threshold (lower = more aggressive outlier removal)
+MAD_THRESHOLD = 3.5  # Modified Z-score threshold (lower = more aggressive outlier removal)
 
 # Savitzky-Golay smoothing parameters
 SAVGOL_WINDOW = 45  # Window length for final smoothing (must be odd)
@@ -267,6 +267,24 @@ ANIMATION_POINT_SIZE = 40  # Size of current ball marker
 ANIMATION_LINE_WIDTH = 3  # Width of trajectory line
 ANIMATION_TRAIL_LENGTH = 0  # Unused (trajectory always grows from start)
 ANIMATION_FRAME_REPEAT = 3  # Repeat each frame N times to slow down the animation
+
+# ============================================
+# STAGE H: OVERLAY VIDEO GENERATION
+# ============================================
+
+# Ball tracking overlay video with RANSAC fitted radius
+# Shows ball circle and trajectory overlaid on original video frames
+
+# Video output settings
+OVERLAY_FPS = 30  # Frames per second for overlay video output
+
+# Visual appearance (BGR color space)
+OVERLAY_CIRCLE_COLOR = (0, 255, 255)      # Yellow circle for RANSAC fitted radius
+OVERLAY_TRAJECTORY_COLOR = (255, 0, 255)  # Magenta trajectory path
+OVERLAY_LINE_WIDTH = 2                     # Width of circle outline and trajectory
+
+# Radius source for overlay visualization
+OVERLAY_RADIUS_SOURCE = "fitted"  # "fitted" = RANSAC fitted radius, "measured" = cleaned measured radius
 
 # ============================================
 # DEBUG & LOGGING
