@@ -15,6 +15,39 @@ from .pin_counter import PinCounter
 from .visualization import PinDetectionVisualizer
 from . import config
 
+# Expose main function for external orchestration
+def run_pin_detection_pipeline(videos=None):
+    """
+    Run pin detection pipeline programmatically.
+    
+    Parameters:
+    -----------
+    videos : list, optional
+        List of video files to process. If None, uses config.VIDEO_FILES
+        
+    Returns:
+    --------
+    dict : Results for each processed video
+    """
+    from .main import main
+    import sys
+    
+    # Build command line arguments
+    args = []
+    if videos:
+        for video in videos:
+            args.extend(['--video', video])
+    
+    # Save original argv and replace
+    original_argv = sys.argv
+    sys.argv = ['main.py'] + args
+    
+    try:
+        main()
+    finally:
+        # Restore original argv
+        sys.argv = original_argv
+
 __version__ = '1.0.0'
 __all__ = [
     'PinAreaMasker',
@@ -23,5 +56,6 @@ __all__ = [
     'select_and_extract_frames',
     'PinCounter',
     'PinDetectionVisualizer',
-    'config'
+    'config',
+    'run_pin_detection_pipeline'
 ]

@@ -64,50 +64,48 @@ cd bowling-cv
 pip install opencv-python numpy scipy pandas matplotlib tqdm scikit-learn
 ```
 
-### Running Complete Lane Detection (All 4 Boundaries)
+### Running the Complete Pipeline (All Phases)
 
 ```bash
-# Run the complete pipeline (uses LaneDetector class)
+# Run all phases on all configured videos
 python main.py
 
-# Or specify a video
+# Run all phases on a single video
 python main.py --video cropped_test3.mp4
+
+# Run specific phase(s)
+python main.py --phase 1                    # Lane detection only
+python main.py --phase 2                    # Ball detection only
+python main.py --phase 4                    # Pin detection only
+python main.py --phase 1 --phase 2          # Lane + Ball
+python main.py --video test3.mp4 --phase 2  # Single video, ball detection
 ```
 
-**Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
+### Running Individual Modules
 
-**New Features:**
-- ✅ Frame caching for faster iteration (saves ~4 mins per video)
-- ✅ Small patch removal from top region (cleaner Sobel detection)
-- ✅ Professional class-based architecture (LaneDetector)
-- ✅ Automatic dependency resolution
-
-### Running Complete Ball Detection (Stages B-H Integrated)
+Each module can be run independently using its own main entry point:
 
 ```bash
-# Run the complete Phase 2 pipeline (all 7 steps)
+# Phase 1: Lane Detection
+python -m src.lane_detection.main --video cropped_test3.mp4
+
+# Phase 2: Ball Detection (requires Phase 1 data)
 python -m src.ball_detection.main --video cropped_test3.mp4
 
-# Process all configured videos
-python -m src.ball_detection.main
+# Phase 4: Pin Detection (requires Phase 1 data)
+python -m src.pin_detection.main --video cropped_test3.mp4
 ```
 
-**Output:** 
-- 4 diagnostic videos (candidates, selection, trajectory, debug)
-- Trajectory data JSON (original + overhead coordinates)
-- Trajectory plots (original + overhead views)
-- Processed & reconstructed trajectory CSVs (Stage G)
-- Overlay videos with RANSAC/measured radius visualization (Stage H)
-- Complete ball tracking from foul line to pins
+**Module Outputs:**
+- **Phase 1**: Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
+- **Phase 2**: 4 diagnostic videos, trajectory CSVs, overlay videos in `output/<video_name>/ball_detection/`
+- **Phase 4**: Pin count, visualizations in `output/<video_name>/pin_detection/`
 
-**Pipeline Steps:**
-1. ✅ Lane masking (4-side boundaries)
-2. ✅ Perspective transformation (overhead view)
-3. ✅ Motion detection (MOG2 background subtraction)
-4. ✅ ROI tracking (legacy visualization)
-5. ✅ Integrated tracking (Stages C+D+E+F: filter → select → track → stop)
-6. ✅ Post-processing (Stage G: cleaning + reconstruction)
-7. ✅ Overlay video generation (Stage H: RANSAC fitted radius visualization)
+**New Architecture Features:**
+- ✅ Modular design - each phase has its own main entry point
+- ✅ Global orchestrator - run individual phases or complete pipeline
+- ✅ Seamless integration - phases automatically find dependencies
+- ✅ Flexible execution - choose which phases to run via command line
 
 ---
 
