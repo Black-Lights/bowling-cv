@@ -18,8 +18,8 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
 **Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F+G+H Integrated)  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
-**Phase 4: Spin/Rotation Analysis** - Planned  
-**Phase 5: Pin Detection** - Planned
+**Phase 4: Pin Detection** - ✅ **COMPLETE** (Frame Differencing + Contour Analysis)  
+**Phase 5: Spin/Rotation Analysis** - Planned
 
 ## Current Progress
 
@@ -164,10 +164,10 @@ bowling-cv/
 │       ├── msac_fitting_*.png     # MSAC analysis plot
 │       ├── bin_analysis_*.png     # Voting system visualization
 │       ├── tracking_*.png         # Tracking stability plots
-│       └── ball_detection/        # Ball detection outputs
+│       ├── ball_detection/        # Ball detection outputs
 │           ├── intermediate/      # Intermediate stage videos
 │           │   ├── *_lane_masked.mp4          # 4-side masked video
-│           │   ├── *_foreground_mask.mp4      # MOG2 raw output
+│           │   ├── *_foreground_mask.mp4       # MOG2 raw output
 │           │   ├── *_shadow_removed.mp4       # After shadow threshold
 │           │   ├── *_denoised.mp4             # Final clean mask
 │           │   └── *_motion_comparison.mp4    # 2×2 comparison grid
@@ -175,14 +175,39 @@ bowling-cv/
 │           ├── *_integrated_candidates.mp4    # All validated candidates + ROI
 │           ├── *_integrated_selection.mp4     # Search strategy visualization
 │           ├── *_integrated_trajectory.mp4    # Ball trajectory trail
-│           └── *_integrated_debug.mp4         # Complete debug overlay
+│           ├── *_integrated_debug.mp4         # Complete debug overlay
+│           ├── trajectory_processed_original.csv  # Cleaned trajectory (original view)
+│           ├── trajectory_processed_overhead.csv  # Cleaned trajectory (overhead view)
+│           ├── trajectory_reconstructed.csv   # RANSAC reconstructed trajectory
+│           ├── *_ransac_overlay.mp4           # RANSAC overlay video (Stage H)
+│           ├── *_trajectory_data.json         # Complete trajectory export
+│           └── homography_data.json           # Homography matrix
+│
+│       └── pin_detection/         # Pin detection outputs (Phase 4)
+│           ├── *_pin_area_masked.mp4          # Extended masked video (pins visible)
+│           ├── *_pin_detection_result.png     # Final result with annotations
+│           ├── *_complete_comparison.png      # 6-panel pipeline visualization
+│           ├── *_pin_detection.json           # Results JSON
+│           └── intermediate/      # Intermediate visualizations
+│               ├── before_frame_*.png         # Before frame (all pins)
+│               ├── after_frame_*.png          # After frame (remaining pins)
+│               ├── frame_selection_visualization.png  # Frame selection comparison
+│               ├── difference_pipeline.png    # Frame difference steps
+│               ├── contour_detection.png      # Contour filtering visualization
+│               └── detection_statistics.png   # Detection metrics
 │
 └── docs/                          # Documentation
-    ├── ANGLE_GUIDE.md             # Angle calculation documentation
-    ├── FIXES.md                   # Bug fixes and improvements
-    ├── PERSPECTIVE_GUIDE.md       # Perspective correction guide
-    └── WHATS_NEW.md               # Change log
-```
+      ├── lane_detection/            # Lane detection documentation
+      │   ├── ANGLE_GUIDE.md         # Angle calculation documentation
+      │   ├── FIXES.md               # Bug fixes and improvements
+      │   ├── PERSPECTIVE_GUIDE.md   # Perspective correction guide
+      │   ├── LANE_DETECTOR_GUIDE.md # LaneDetector class guide
+      │   └── WHATS_NEW.md           # Change log
+      │
+      └── pin_detection/             # Pin detection documentation (Phase 4)
+          ├── IMPLEMENTATION_SUMMARY.md      # Complete implementation overview
+          ├── PHASE4_PIN_DETECTION_ALGORITHM.md  # Detailed algorithm explanation
+          └── QUICK_START_GUIDE.md           # Getting started with pin detection
 
 ---
 
@@ -322,10 +347,55 @@ bowling-cv/
   - Comparative analysis across multiple throws
   - Statistical trajectory metrics
 
+### ✅ Implemented (Phase 4 - COMPLETE)
+- **Pin Detection & Counting**
+  - ✅ **Extended Masking for Pin Area**
+    - Reuses Phase 1 boundary data
+    - Extends lane boundaries OUTWARD in pin area (above top boundary)
+    - Reveals pins while hiding adjacent lane pins
+    - Configurable extension distance (default: 20 pixels)
+  
+  - ✅ **Frame Selection**
+    - Fixed offset mode (simple, always works)
+    - Trajectory-based mode (smart, uses Phase 2 data)
+    - ROI focus on top 50% of frame (pin area only)
+    - Before frame: All pins standing
+    - After frame: Pins settled after impact
+  
+  - ✅ **Pin Detection Algorithm**
+    - Direct analysis of AFTER frame (not difference)
+    - Brightness thresholding (120) to isolate white pins
+    - Y-position filtering (above top boundary only)
+    - Morphological operations for noise removal
+    - Contour detection with geometric validation:
+      - Area: 150-8000 pixels²
+      - Aspect ratio: 0.2-1.5
+      - Solidity: >0.5
+  
+  - ✅ **Result Classification**
+    - STRIKE! (10/10) - All pins toppled
+    - N Pins Down (N/10) - Partial pins toppled
+    - All Pins Down - Spare on second ball
+    - Gutter Ball (0/10) - No pins hit
+  
+  - ✅ **Comprehensive Visualizations**
+    - Extended mask visualization
+    - Frame selection comparison
+    - Complete 6-panel pipeline view
+    - Contour detection (all vs filtered)
+    - Final result with pin annotations
+    - Detection statistics plots
+  
+  - ✅ **Data Export**
+    - JSON format with complete results
+    - Pin contour details (area, aspect ratio, solidity)
+    - Detection confidence score
+    - Timestamp and frame indices
+    - Detection parameters for reproducibility
+
 ### Planned (Phase 3+)
 - **3D Trajectory Reconstruction**
 - **Spin/Rotation Analysis and Axis Detection**
-- **Pin Detection and Topple Counting**
 - **Strike/Spare Classification**
 - **Comprehensive Visualization Dashboard**
 
@@ -770,6 +840,13 @@ For questions or collaboration inquiries:
 ---
 
 ## Recent Achievements
+
+### Phase 4: Pin Detection System (February 6, 2026)
+- Extended boundary masking with outward expansion for complete pin visibility
+- Direct AFTER frame analysis with optimized brightness threshold
+- Robust geometric validation (area, aspect ratio, solidity filters)
+- Tested successfully on multiple videos (9/10 pins, STRIKE detection)
+- Complete visualization pipeline with annotated output videos
 
 ### Stage H: RANSAC Overlay Video Generation (February 6, 2026)
 - Created standalone overlay video generation module
