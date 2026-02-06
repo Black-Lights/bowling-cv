@@ -1,6 +1,6 @@
 # Bowling Analysis Project
 
-[![Status](https://img.shields.io/badge/status-Phase%201%20Complete-green)](https://github.com/Black-Lights/bowling-cv)
+[![Status](https://img.shields.io/badge/status-Phase%203%20In%20Progress-yellow)](https://github.com/Black-Lights/bowling-cv)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.0+-green.svg)](https://opencv.org/)
 [![scikit--learn](https://img.shields.io/badge/scikit--learn-1.0+-orange.svg)](https://scikit-learn.org/)
@@ -17,9 +17,8 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
 **Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F+G+H Integrated)  
-**Phase 3: 3D Trajectory Reconstruction** - Planned  
-**Phase 4: Pin Detection** - ✅ **COMPLETE** (Frame Differencing + Contour Analysis)  
-**Phase 5: Spin/Rotation Analysis** - Planned
+**Phase 3: Spin Analysis** - 🚧 **IN PROGRESS** (Stages A+B+C Complete, D-G Planned)  
+**Phase 4: Pin Detection** - ✅ **COMPLETE** (Frame Differencing + Contour Analysis)
 
 ## Current Progress
 
@@ -76,8 +75,10 @@ python main.py --video cropped_test3.mp4
 # Run specific phase(s)
 python main.py --phase 1                    # Lane detection only
 python main.py --phase 2                    # Ball detection only
+python main.py --phase 3                    # Spin analysis only
 python main.py --phase 4                    # Pin detection only
 python main.py --phase 1 --phase 2          # Lane + Ball
+python main.py --phase 2 --phase 3          # Ball + Spin
 python main.py --video test3.mp4 --phase 2  # Single video, ball detection
 ```
 
@@ -92,6 +93,9 @@ python -m src.lane_detection.main --video cropped_test3.mp4
 # Phase 2: Ball Detection (requires Phase 1 data)
 python -m src.ball_detection.main --video cropped_test3.mp4
 
+# Phase 3: Spin Analysis (requires Phase 2 trajectory data)
+python -m src.spin_analysis
+
 # Phase 4: Pin Detection (requires Phase 1 data)
 python -m src.pin_detection.main --video cropped_test3.mp4
 ```
@@ -99,6 +103,7 @@ python -m src.pin_detection.main --video cropped_test3.mp4
 **Module Outputs:**
 - **Phase 1**: Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
 - **Phase 2**: 4 diagnostic videos, trajectory CSVs, overlay videos in `output/<video_name>/ball_detection/`
+- **Phase 3**: 3D projection data, optical flow visualizations, rotation analysis in `output/spin_analysis/`
 - **Phase 4**: Pin count, visualizations in `output/<video_name>/pin_detection/`
 
 **New Architecture Features:**
@@ -153,6 +158,20 @@ bowling-cv/
 │   │   ├── integrated_visualization.py # 4 diagnostic visualization videos
 │   │   └── roi_visualization.py   # Legacy visualization (pre-integration)
 │   │
+│   ├── spin_analysis/             # Spin analysis module (Phase 3)
+│   │   ├── __init__.py
+│   │   ├── __main__.py            # Module entry point for direct execution
+│   │   ├── config.py              # Spin analysis configuration
+│   │   ├── main.py                # Phase 3 entry point (Stage A-G pipeline)
+│   │   ├── data_prep.py           # Stage A: Data preparation from Phase 2
+│   │   ├── optical_flow.py        # Stage B: Feature tracking with Lucas-Kanade
+│   │   ├── projection_3d.py       # Stage C: 3D sphere projection
+│   │   ├── rotation_calc.py       # Stage D: Kabsch algorithm (planned)
+│   │   ├── post_process.py        # Stage E: Outlier removal (planned)
+│   │   ├── metrics.py             # Stage F: RPM calculation (planned)
+│   │   ├── visualizations.py      # Stage G: Final reporting (planned)
+│   │   └── utils.py               # Utility functions
+│   │
 │   └── pin_detection/             # Pin detection module (Phase 4)
 │       ├── __init__.py
 │       ├── config.py              # Pin detection configuration
@@ -193,6 +212,18 @@ bowling-cv/
 │           ├── *_trajectory_data.json         # Complete trajectory export
 │           └── homography_data.json           # Homography matrix
 │
+├── output/                        # Generated outputs (continued)
+│   └── spin_analysis/             # Spin analysis outputs (Phase 3)
+│       ├── stage_a_trajectory_prepared.csv    # Ball centers and radii (77 frames)
+│       ├── stage_a_trajectory_validation.png  # Radius progression plot
+│       ├── stage_b_optical_flow_pairs.csv     # Tracked feature pairs (2,051 pairs)
+│       ├── stage_b_optical_flow_test.png      # Sample optical flow visualization
+│       ├── stage_b_feature_count_summary.png  # Features per frame bar chart
+│       ├── stage_c_3d_points.csv              # 3D projected points (2,030 valid)
+│       ├── stage_c_3d_projection.png          # 3D projection visualization
+│       └── (stage_d-g outputs planned)        # Rotation, metrics, final reports
+│
+│   └── <video_name>/              # Per-video outputs
 │       └── pin_detection/         # Pin detection outputs (Phase 4)
 │           ├── *_pin_area_masked.mp4          # Extended masked video (pins visible)
 │           ├── *_pin_detection_result.png     # Final result with annotations
@@ -213,6 +244,9 @@ bowling-cv/
       │   ├── PERSPECTIVE_GUIDE.md   # Perspective correction guide
       │   ├── LANE_DETECTOR_GUIDE.md # LaneDetector class guide
       │   └── WHATS_NEW.md           # Change log
+      │
+      ├── spin_analysis/             # Spin analysis documentation (Phase 3)
+      │   └── VISUALIZATION_CONFIG.md    # Visualization configuration guide
       │
       └── pin_detection/             # Pin detection documentation (Phase 4)
           ├── IMPLEMENTATION_SUMMARY.md      # Complete implementation overview
@@ -348,7 +382,49 @@ bowling-cv/
     - **Output**: `ball_tracking_overlay_ransac.mp4`
     - **Customizable appearance**: All colors and line widths controlled via config
 
-### 🔄 In Progress (Phase 2 - Advanced Analysis)
+### � In Progress (Phase 3 - Spin Analysis)
+- **3D Feature Tracking & Rotation Analysis**
+  - ✅ **Stage A: Data Preparation** 
+    - CSV trajectory extraction from Phase 2
+    - Ball center and radius validation
+    - 77 frames with radius range 10-56 pixels
+  
+  - ✅ **Stage B: Optical Flow Feature Tracking**
+    - Shi-Tomasi corner detection (100 features max)
+    - Lucas-Kanade sparse optical flow
+    - HSV filtering for ball surface isolation
+    - Exponential distance thresholds (1.2ʳ + 1)
+    - 2,051 feature pairs tracked across 76 frame pairs
+  
+  - ✅ **Stage C: 3D Projection**
+    - Sphere equation projection (x² + y² + z² = r²)
+    - Coordinate system validation (ROI → Image conversion)
+    - Hemisphere filtering (z > -0.2 × radius)
+    - 99% projection success rate (2,030/2,051 features)
+    - CSV ball center for consistent reference frame
+  
+  - 🔄 **Stage D: Rotation Calculation** (Planned)
+    - Kabsch algorithm for 3D point cloud alignment
+    - Rotation matrix extraction between frames
+    - Rotation axis and angle calculation
+  
+  - 🔄 **Stage E: Post-Processing** (Planned)
+    - Outlier detection and removal
+    - Temporal smoothing of rotation axis
+    - Frame pair filtering
+  
+  - 🔄 **Stage F: Metrics Calculation** (Planned)
+    - RPM (revolutions per minute) calculation
+    - Rotation axis tilt angle
+    - Spin decay rate analysis
+  
+  - 🔄 **Stage G: Visualization & Reporting** (Planned)
+    - 3D animation of ball rotation
+    - RPM vs frame plots
+    - Rotation axis visualization
+    - Final metrics CSV export
+
+### 🔄 Planned (Phase 2 - Advanced Analysis)
 - **Trajectory Analysis & Physics**
   - Velocity and acceleration curves over time
   - Path curvature analysis for hook detection
@@ -403,11 +479,10 @@ bowling-cv/
     - Timestamp and frame indices
     - Detection parameters for reproducibility
 
-### Planned (Phase 3+)
-- **3D Trajectory Reconstruction**
-- **Spin/Rotation Analysis and Axis Detection**
+### Planned (Phase 5+)
 - **Strike/Spare Classification**
 - **Comprehensive Visualization Dashboard**
+- **Multi-throw Comparison and Statistics**
 
 ---
 
@@ -444,6 +519,7 @@ python main.py --phase 4                    # Pin detection only
 
 # Run phase combinations
 python main.py --phase 1 --phase 2          # Lane + Ball
+python main.py --phase 2 --phase 3          # Ball + Spin
 python main.py --phase 2 --phase 4          # Ball + Pin (requires Phase 1 data)
 python main.py --video test3.mp4 --phase 2  # Single video, ball detection only
 ```
