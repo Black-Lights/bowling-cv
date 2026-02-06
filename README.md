@@ -82,10 +82,10 @@ python main.py --video cropped_test3.mp4
 - ✅ Professional class-based architecture (LaneDetector)
 - ✅ Automatic dependency resolution
 
-### Running Complete Ball Detection (Stages B-G Integrated)
+### Running Complete Ball Detection (Stages B-H Integrated)
 
 ```bash
-# Run the complete Phase 2 pipeline (all 6 steps)
+# Run the complete Phase 2 pipeline (all 7 steps)
 python -m src.ball_detection.main --video cropped_test3.mp4
 
 # Process all configured videos
@@ -97,6 +97,7 @@ python -m src.ball_detection.main
 - Trajectory data JSON (original + overhead coordinates)
 - Trajectory plots (original + overhead views)
 - Processed & reconstructed trajectory CSVs (Stage G)
+- Overlay videos with RANSAC/measured radius visualization (Stage H)
 - Complete ball tracking from foul line to pins
 
 **Pipeline Steps:**
@@ -106,6 +107,7 @@ python -m src.ball_detection.main
 4. ✅ ROI tracking (legacy visualization)
 5. ✅ Integrated tracking (Stages C+D+E+F: filter → select → track → stop)
 6. ✅ Post-processing (Stage G: cleaning + reconstruction)
+7. ✅ Overlay video generation (Stage H: RANSAC fitted radius visualization)
 
 ---
 
@@ -473,8 +475,15 @@ python -m src.ball_detection.overlay_ransac cropped_test3.mp4
 - `trajectory_on_template.png` - Final trajectory on bowling lane template
 - `trajectory_animation.mp4` - Animated trajectory building video
 
-**Stage H Overlay Video Output:**
-- `ball_tracking_overlay_ransac.mp4` - Ball tracking overlay with RANSAC fitted radius (yellow circles) and trajectory path (magenta line)
+**Stage H Overlay Video Outputs (Configurable):**
+- `ball_tracking_overlay_ransac.mp4` - RANSAC fitted radius (exponential decay model)
+- `ball_tracking_overlay_measured_cleaned.mp4` - Cleaned measured radius (after MAD outlier removal)
+- `ball_tracking_overlay_measured_raw.mp4` - Raw measured radius (original detections)
+- Configuration flags in config.py:
+  - `SAVE_OVERLAY_RANSAC_FITTED` (default: True)
+  - `SAVE_OVERLAY_MEASURED_CLEANED` (default: False)
+  - `SAVE_OVERLAY_MEASURED_RAW` (default: False)
+- All overlays show: Yellow ball circles + Magenta trajectory path
 
 **Stage A-B Intermediate Outputs:**
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
@@ -848,12 +857,12 @@ For questions or collaboration inquiries:
 - Tested successfully on multiple videos (9/10 pins, STRIKE detection)
 - Complete visualization pipeline with annotated output videos
 
-### Stage H: RANSAC Overlay Video Generation (February 6, 2026)
-- Created standalone overlay video generation module
-- RANSAC fitted radius visualization with exponential decay model
-- Trajectory path overlay on original video frames
-- Full configuration integration with customizable appearance
-- Visual verification tool for post-processing accuracy
+### Stage H: Overlay Video Generation (February 6, 2026)
+- Flexible overlay video generation with multiple radius source options
+- Three configurable modes: RANSAC fitted, cleaned measured, raw measured
+- Can generate 1, 2, or all 3 overlay videos simultaneously via config flags
+- Integrated into main pipeline as Step 7 (automatic after Stage G)
+- Full customization: colors, line widths, FPS, radius sources
 
 ### Stage G Post-Processing (February 5, 2026)
 - Integrated trajectory cleaning pipeline

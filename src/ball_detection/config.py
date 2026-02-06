@@ -272,19 +272,22 @@ ANIMATION_FRAME_REPEAT = 3  # Repeat each frame N times to slow down the animati
 # STAGE H: OVERLAY VIDEO GENERATION
 # ============================================
 
-# Ball tracking overlay video with RANSAC fitted radius
+# Ball tracking overlay video with different radius sources
 # Shows ball circle and trajectory overlaid on original video frames
+# Can generate multiple overlay videos simultaneously
+
+# Enable/disable specific overlay types (can enable multiple)
+SAVE_OVERLAY_RANSAC_FITTED = True      # RANSAC fitted radius (exponential decay model)
+SAVE_OVERLAY_MEASURED_CLEANED = False  # Cleaned measured radius (after MAD outlier removal)  
+SAVE_OVERLAY_MEASURED_RAW = False      # Raw measured radius (original detections before post-processing)
 
 # Video output settings
 OVERLAY_FPS = 30  # Frames per second for overlay video output
 
 # Visual appearance (BGR color space)
-OVERLAY_CIRCLE_COLOR = (0, 255, 255)      # Yellow circle for RANSAC fitted radius
+OVERLAY_CIRCLE_COLOR = (0, 255, 255)      # Yellow circle for ball radius
 OVERLAY_TRAJECTORY_COLOR = (255, 0, 255)  # Magenta trajectory path
 OVERLAY_LINE_WIDTH = 2                     # Width of circle outline and trajectory
-
-# Radius source for overlay visualization
-OVERLAY_RADIUS_SOURCE = "fitted"  # "fitted" = RANSAC fitted radius, "measured" = cleaned measured radius
 
 # ============================================
 # DEBUG & LOGGING
