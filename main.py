@@ -1,18 +1,38 @@
 """
-Main entry point for bowling lane detection pipeline.
+Main entry point for Bowling Computer Vision Pipeline.
 
-This script runs the complete Phase 1 lane detection using the LaneDetector class.
-Processes all configured videos and outputs all 4 boundaries + intersection points.
+Orchestrates all phases of the bowling analysis system:
+- Phase 1: Lane Detection (boundary detection)
+- Phase 2: Ball Detection (trajectory tracking)
+- Phase 4: Pin Detection (toppled pin counting)
 
-Version: 1.0.0
+Can run individual phases or the complete end-to-end pipeline.
+
+Version: 2.0.0
 Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
-Last Updated: January 30, 2026
+Last Updated: February 6, 2026
 
 Usage:
+    # Run complete pipeline (all phases)
     python main.py
     
-    Or process a single video:
+    # Run individual phases
+    python main.py --phase 1              # Lane detection only
+    python main.py --phase 2              # Ball detection only
+    python main.py --phase 4              # Pin detection only
+    
+    # Run specific combinations
+    python main.py --phase 1 --phase 2    # Lane + Ball
+    python main.py --phase 2 --phase 4    # Ball + Pin (requires Phase 1 data)
+    
+    # Process single video
     python main.py --video cropped_test3.mp4
+    python main.py --video cropped_test3.mp4 --phase 2
+    
+    # Run individual module mains directly
+    python -m src.lane_detection.main --video cropped_test3.mp4
+    python -m src.ball_detection.main --video cropped_test3.mp4
+    python -m src.pin_detection.main --video cropped_test3.mp4
 """
 
 import sys
@@ -22,81 +42,157 @@ from pathlib import Path
 # Add src directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
 
-from lane_detection import LaneDetector, config  # type: ignore
-
 
 def main():
     """
-    Main entry point for complete lane detection pipeline.
+    Main orchestrator for the complete bowling CV pipeline.
     
-    Processes configured videos using LaneDetector class to detect
-    all 4 boundaries and calculate all intersection points.
+    Coordinates execution of Phase 1, 2, and 4 based on user arguments.
     """
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Bowling Lane Detection Pipeline')
-    parser.add_argument('--video', type=str, help='Process single video file')
+    parser = argparse.ArgumentParser(
+        description='Bowling Computer Vision Pipeline - Complete Analysis System',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py                           # Run all phases on all videos
+  python main.py --phase 1                 # Run only Phase 1 (lane detection)
+  python main.py --phase 2 --phase 4       # Run Phase 2 and 4
+  python main.py --video cropped_test3.mp4 # Process single video (all phases)
+  python main.py --video test3.mp4 --phase 2  # Single video, Phase 2 only
+
+Individual Module Entry Points:
+  python -m src.lane_detection.main --video cropped_test3.mp4
+  python -m src.ball_detection.main --video cropped_test3.mp4
+  python -m src.pin_detection.main --video cropped_test3.mp4
+        """
+    )
+    parser.add_argument('--video', type=str, 
+                        help='Process single video file (default: process all configured videos)')
+    parser.add_argument('--phase', type=int, action='append', choices=[1, 2, 4],
+                        help='Run specific phase(s). Can be specified multiple times. Default: run all phases')
     args = parser.parse_args()
     
-    # Determine which videos to process
-    if args.video:
-        videos = [args.video]
+    # Determine which phases to run
+    if args.phase:
+        phases = sorted(set(args.phase))  # Remove duplicates and sort
     else:
-        videos = config.VIDEO_FILES
+        phases = [1, 2, 4]  # Run all phases by default
     
+    # Determine which videos to process
+    videos = [args.video] if args.video else None
+    
+    # Print header
     print(f"\n{'#'*80}")
-    print(f"# BOWLING LANE DETECTION PIPELINE v{LaneDetector.VERSION}")
-    print(f"# Processing {len(videos)} video(s)")
+    print(f"# BOWLING COMPUTER VISION PIPELINE v2.0.0")
+    print(f"# Phases: {', '.join(f'P{p}' for p in phases)}")
+    if args.video:
+        print(f"# Video: {args.video}")
+    else:
+        print(f"# Videos: All configured videos")
     print(f"{'#'*80}\n")
     
-    # Process each video
-    successful = 0
-    failed = 0
-    
-    for video_file in videos:
-        try:
-            # Initialize detector
-            detector = LaneDetector(video_file, config)
-            
-            # Run complete pipeline
-            boundaries, intersections = detector.detect_all()
-            
-            # Save all results
-            detector.save()
-            
-            # Print summary
-            print(f"\n{'='*70}")
-            print(f"📊 SUMMARY: {detector.video_name}")
-            print(f"{'='*70}")
-            print(f"  Boundaries Detected:")
-            print(f"    ✅ Bottom (Foul):  Y={boundaries['bottom']['center_y']}")
-            print(f"    ✅ Left Master:    X={boundaries['left']['x_intersect']}, θ={boundaries['left']['median_angle']:.1f}°")
-            print(f"    ✅ Right Master:   X={boundaries['right']['x_intersect']}, θ={boundaries['right']['median_angle']:.1f}°")
-            print(f"    ✅ Top (Pin Area): Y={boundaries['top']['y_position']:.1f}")
-            print(f"\n  Intersection Points:")
-            print(f"    • Top-Left:     ({intersections['top_left']['x']}, {intersections['top_left']['y']})")
-            print(f"    • Top-Right:    ({intersections['top_right']['x']}, {intersections['top_right']['y']})")
-            print(f"    • Bottom-Left:  ({intersections['bottom_left']['x']}, {intersections['bottom_left']['y']})")
-            print(f"    • Bottom-Right: ({intersections['bottom_right']['x']}, {intersections['bottom_right']['y']})")
-            print(f"\n  Output: {detector.output_dir}")
-            print(f"{'='*70}\n")
-            
-            successful += 1
-            
-        except Exception as e:
-            print(f"\n❌ ERROR processing {video_file}: {e}")
-            failed += 1
-            
-            if config.DEBUG_MODE:
-                import traceback
-                traceback.print_exc()
+    # Run each phase in sequence
+    for phase in phases:
+        if phase == 1:
+            run_phase_1(videos)
+        elif phase == 2:
+            run_phase_2(videos)
+        elif phase == 4:
+            run_phase_4(videos)
     
     # Final summary
     print(f"\n{'#'*80}")
     print(f"# PIPELINE COMPLETE")
-    print(f"# Successful: {successful}/{len(videos)}")
-    if failed > 0:
-        print(f"# Failed: {failed}/{len(videos)}")
+    print(f"# Executed Phases: {', '.join(f'Phase {p}' for p in phases)}")
     print(f"{'#'*80}\n")
+
+
+def run_phase_1(videos=None):
+    """
+    Run Phase 1: Lane Detection
+    
+    Parameters:
+    -----------
+    videos : list, optional
+        List of video files to process. If None, uses configured videos.
+    """
+    print(f"\n{'='*80}")
+    print(f"PHASE 1: LANE DETECTION")
+    print(f"{'='*80}\n")
+    
+    from lane_detection.main import main as lane_main
+    import sys
+    
+    # Build command line arguments
+    original_argv = sys.argv
+    args = ['main.py']
+    if videos:
+        args.extend(['--video', videos[0]])  # Lane detection processes one video at a time
+    
+    sys.argv = args
+    try:
+        lane_main()
+    finally:
+        sys.argv = original_argv
+
+
+def run_phase_2(videos=None):
+    """
+    Run Phase 2: Ball Detection
+    
+    Parameters:
+    -----------
+    videos : list, optional
+        List of video files to process. If None, uses configured videos.
+    """
+    print(f"\n{'='*80}")
+    print(f"PHASE 2: BALL DETECTION")
+    print(f"{'='*80}\n")
+    
+    from ball_detection.main import main as ball_main
+    import sys
+    
+    # Build command line arguments
+    original_argv = sys.argv
+    args = ['main.py']
+    if videos:
+        args.extend(['--video', videos[0]])  # Ball detection processes one video at a time
+    
+    sys.argv = args
+    try:
+        ball_main()
+    finally:
+        sys.argv = original_argv
+
+
+def run_phase_4(videos=None):
+    """
+    Run Phase 4: Pin Detection
+    
+    Parameters:
+    -----------
+    videos : list, optional
+        List of video files to process. If None, uses configured videos.
+    """
+    print(f"\n{'='*80}")
+    print(f"PHASE 4: PIN DETECTION")
+    print(f"{'='*80}\n")
+    
+    from pin_detection.main import main as pin_main
+    import sys
+    
+    # Build command line arguments
+    original_argv = sys.argv
+    args = ['main.py']
+    if videos:
+        args.extend(['--video', videos[0]])  # Pin detection processes one video at a time
+    
+    sys.argv = args
+    try:
+        pin_main()
+    finally:
+        sys.argv = original_argv
 
 
 if __name__ == "__main__":

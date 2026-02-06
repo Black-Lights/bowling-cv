@@ -6,10 +6,13 @@ Currently implements:
 - Step 2: Perspective transformation to overhead view
 - Step 3: Motion detection (background subtraction)
 - Step 4: ROI logic (dual-mode search strategy with Kalman filter)
+- Step 5: Blob analysis and filtering
+- Step 6: Post-processing (trajectory cleaning and reconstruction)
+- Step 7: Overlay video generation (RANSAC fitted radius visualization)
 
-Version: 1.2.0
+Version: 1.3.0
 Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
-Last Updated: February 1, 2026
+Last Updated: February 6, 2026
 
 Usage:
     python -m src.ball_detection.main
@@ -44,10 +47,11 @@ def main():
     - Step 3: Motion detection with background subtraction (Stage B)
     - Step 4: ROI logic with Kalman filter tracking (Stage C)
     - Step 5: Blob analysis and filtering (Stage D)
+    - Step 6: Post-processing - trajectory cleaning and reconstruction (Stage G)
+    - Step 7: Overlay video generation - RANSAC visualization (Stage H)
     
     Future steps:
-    - Step 6: Trajectory analysis and export
-    - Step 7: Spin/rotation analysis
+    - Phase 5: Spin/rotation analysis
     """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Bowling Ball Detection Pipeline - Phase 2')
@@ -320,6 +324,32 @@ def main():
                 else:
                     print(f"  Warning: Trajectory data not found: {trajectory_json}")
                     print(f"  Skipping post-processing for this video")
+            
+            # Step 7: Overlay Video Generation (Stage H) - RANSAC Overlay on Original Video
+            if not args.skip_postprocess and (config.SAVE_OVERLAY_RANSAC_FITTED or 
+                                              config.SAVE_OVERLAY_MEASURED_CLEANED or 
+                                              config.SAVE_OVERLAY_MEASURED_RAW):
+                print(f"\n{'='*60}")
+                print(f"Step 7: Overlay Video Generation (Stage H)")
+                print(f"{'='*60}")
+                
+                from ball_detection.overlay_ransac import generate_ransac_overlay
+                
+                trajectory_csv = output_base_dir / 'ball_detection' / 'trajectory_processed_original.csv'
+                
+                if trajectory_csv.exists():
+                    try:
+                        result = generate_ransac_overlay(video_path, config)
+                        
+                        print(f"\n>>> Overlay generation complete for {video_file}")
+                        print(f"  Generated {len(result['output_paths'])} overlay video(s):")
+                        for path in result['output_paths']:
+                            print(f"    - {Path(path).name}")
+                    except Exception as e:
+                        print(f"  Warning: Failed to generate overlay videos: {e}")
+                else:
+                    print(f"  Warning: Processed trajectory CSV not found: {trajectory_csv}")
+                    print(f"  Skipping overlay generation for this video")
                 
         except FileNotFoundError as e:
             print(f"\nERROR: Error processing {video_file}:")

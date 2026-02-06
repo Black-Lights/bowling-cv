@@ -8,10 +8,10 @@ Detects all 4 bowling lane boundaries:
 
 Version: 1.0.0
 Authors: Mohammad Umayr Romshoo, Mohammad Ammar Mughees
-Last Updated: January 30, 2026
+Last Updated: February 6, 2026
 """
 
-# Main API - LaneDetector class
+# Main API - LaneDetector class and pipeline entry point
 from .lane_detector import LaneDetector
 
 # Legacy imports for backward compatibility
