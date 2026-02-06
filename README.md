@@ -126,8 +126,9 @@ bowling-cv/
 │   ├── lane_detection/            # Lane boundary detection module (Phase 1)
 │   │   ├── __init__.py
 │   │   ├── config.py              # Configuration settings
-│   │   ├── lane_detector.py       # LaneDetector class (main entry)
-│   │   ├── main_legacy.py         # Legacy entry point
+│   │   ├── lane_detector.py       # LaneDetector class (main API)
+│   │   ├── main.py                # Phase 1 entry point
+│   │   ├── main_legacy.py         # Legacy entry point (deprecated)
 │   │   ├── detection_functions.py # Line detection algorithms
 │   │   ├── detection_utils.py     # Utility functions
 │   │   ├── master_line_computation.py # Master line voting system
@@ -137,20 +138,29 @@ bowling-cv/
 │   │   ├── intermediate_visualization.py # Debug visualizations
 │   │   └── tracking_analysis.py   # Tracking stability analysis
 │   │
-│   └── ball_detection/            # Ball detection module (Phase 2)
+│   ├── ball_detection/            # Ball detection module (Phase 2)
+│   │   ├── __init__.py
+│   │   ├── config.py              # Ball detection configuration
+│   │   ├── main.py                # Phase 2 entry point (7-step pipeline)
+│   │   ├── mask_video.py          # Video masking for ball focus
+│   │   ├── homography.py          # 2D homography calculation (DLT)
+│   │   ├── transform_video.py     # Perspective transformation to overhead view
+│   │   ├── motion_detection.py    # MOG2 background subtraction (Stage B)
+│   │   ├── roi_logic.py           # Kalman filter tracking (Stages C+E)
+│   │   ├── blob_analysis.py       # Geometric validation (Stage D)
+│   │   ├── post_processing.py     # Trajectory cleaning & reconstruction (Stage G)
+│   │   ├── overlay_ransac.py      # RANSAC overlay video generation (Stage H)
+│   │   ├── integrated_visualization.py # 4 diagnostic visualization videos
+│   │   └── roi_visualization.py   # Legacy visualization (pre-integration)
+│   │
+│   └── pin_detection/             # Pin detection module (Phase 4)
 │       ├── __init__.py
-│       ├── config.py              # Ball detection configuration
-│       ├── main.py                # Ball detection entry point
-│       ├── mask_video.py          # Video masking for ball focus
-│       ├── homography.py          # 2D homography calculation (DLT)
-│       ├── transform_video.py     # Perspective transformation to overhead view
-│       ├── motion_detection.py    # MOG2 background subtraction (Stage B)
-│       ├── roi_logic.py           # Kalman filter tracking (Stages C+E)
-│       ├── blob_analysis.py       # Geometric validation (Stage D)
-│       ├── post_processing.py     # Trajectory cleaning & reconstruction (Stage G)
-│       ├── overlay_ransac.py      # RANSAC overlay video generation (Stage H)
-│       ├── integrated_visualization.py # 4 diagnostic visualization videos
-│       └── roi_visualization.py   # Legacy visualization (pre-integration)
+│       ├── config.py              # Pin detection configuration
+│       ├── main.py                # Phase 4 entry point (5-step pipeline)
+│       ├── video_preprocessing.py # Extended masking for pin area
+│       ├── frame_selector.py      # Before/after frame selection
+│       ├── pin_counter.py         # Contour detection and counting
+│       └── visualization.py       # Result visualizations
 │
 ├── output/                        # Generated outputs
 │   └── <video_name>/
@@ -416,19 +426,42 @@ bowling-cv/
 
 ## Usage Guide
 
-### Phase 1: Complete Lane Detection
+### Global Orchestrator (Recommended)
+
+The global `main.py` orchestrates all phases from a single entry point:
 
 ```bash
-# Run the complete pipeline (uses LaneDetector class)
+# Run all phases on all configured videos
 python main.py
 
-# Or specify a video
+# Run all phases on a single video
 python main.py --video cropped_test3.mp4
+
+# Run specific phase(s)
+python main.py --phase 1                    # Lane detection only
+python main.py --phase 2                    # Ball detection only
+python main.py --phase 4                    # Pin detection only
+
+# Run phase combinations
+python main.py --phase 1 --phase 2          # Lane + Ball
+python main.py --phase 2 --phase 4          # Ball + Pin (requires Phase 1 data)
+python main.py --video test3.mp4 --phase 2  # Single video, ball detection only
+```
+
+### Individual Module Entry Points
+
+Each phase can also be run independently:
+
+#### Phase 1: Lane Detection
+
+```bash
+# Using module entry point
+python -m src.lane_detection.main --video cropped_test3.mp4
 ```
 
 **Output:** Complete lane box with all 4 boundaries in `output/<video_name>/final_all_boundaries_*.mp4`
 
-### Phase 2: Ball Detection (Stages B+C+D+E+F+G Integrated)
+#### Phase 2: Ball Detection (Stages A-H Complete Pipeline)
 
 ```bash
 # Run complete ball detection pipeline (all 6 steps)
@@ -491,17 +524,64 @@ python -m src.ball_detection.overlay_ransac cropped_test3.mp4
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_denoised.mp4` - Final clean mask (with shadow separation)
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_motion_comparison.mp4` - 2×2 comparison
 
-### Using as a Module
+#### Phase 4: Pin Detection
+
+```bash
+# Using module entry point
+python -m src.pin_detection.main --video cropped_test3.mp4
+```
+
+**Output:** Pin count, visualizations, and JSON results in `output/<video_name>/pin_detection/`
+
+---
+
+### Using as a Module (Programmatic Access)
+
+**Global Orchestrator:**
+```python
+from main import run_phase_1, run_phase_2, run_phase_4
+
+# Run individual phases programmatically
+run_phase_1(['cropped_test3.mp4'])
+run_phase_2(['cropped_test3.mp4'])
+run_phase_4(['cropped_test3.mp4'])
+```
 
 **Phase 1: Lane Detection**
 ```python
-from src.lane_detection import LaneDetector, config
-
-# Create detector instance
-detector = LaneDetector('path/to/video.mp4', config)
+from src.lane_detection.main import detect_lane_boundaries
+from src.lane_detection import config
 
 # Run complete detection pipeline
+result = detect_lane_boundaries('cropped_test3.mp4', config)
+print(f"Video: {result['video_name']}")
+print(f"Boundaries: {result['boundaries']}")
+print(f"Intersections: {result['intersections']}")
+
+# Or use LaneDetector class directly
+from src.lane_detection import LaneDetector
+
+detector = LaneDetector('path/to/video.mp4', config)
 boundaries, intersections = detector.detect_all()
+```
+
+**Phase 2: Ball Detection**
+```python
+from src.ball_detection import run_ball_detection_pipeline
+
+# Run complete pipeline programmatically
+run_ball_detection_pipeline(
+    videos=['cropped_test3.mp4'],
+    skip_postprocess=False
+)
+```
+
+**Phase 4: Pin Detection**
+```python
+from src.pin_detection import run_pin_detection_pipeline
+
+# Run complete pipeline programmatically
+run_pin_detection_pipeline(videos=['cropped_test3.mp4'])
 ```
 
 **Phase 2: Integrated Ball Detection (Tracking-by-Detection Architecture)**
@@ -745,23 +825,27 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
 - [ ] Multi-throw comparative analysis
 - [ ] Statistical trajectory metrics
 
-### Phase 4: 3D Reconstruction (Planned)
-- [ ] Camera calibration
-- [ ] Perspective transformation
-- [ ] 3D trajectory mapping
-- [ ] Height estimation
+### Phase 4: Pin Detection ✅ COMPLETE
+- [x] Extended boundary masking for pin area
+- [x] Fixed offset and trajectory-based frame selection
+- [x] Direct AFTER frame analysis
+- [x] Contour detection with geometric validation
+- [x] STRIKE/pin count classification
+- [x] JSON export with detection details
+- [x] Comprehensive visualizations (6-panel pipeline)
 
-### Phase 4: Spin Analysis (Planned)
+### Phase 5: Spin/Rotation Analysis (Planned)
 - [ ] Rotation detection
 - [ ] Axis calculation
 - [ ] Angular velocity measurement
 - [ ] Spin visualization
 
-### Phase 5: Pin Detection (Planned)
-- [ ] Pin position detection
-- [ ] Topple counting
-- [ ] Strike/spare classification
-- [ ] Score calculation
+### Phase 6: Advanced Analysis (Planned)
+- [ ] 3D trajectory reconstruction
+- [ ] Camera calibration
+- [ ] Height estimation
+- [ ] Impact angle calculations
+- [ ] Multi-throw comparative analysis
 
 ---
 
