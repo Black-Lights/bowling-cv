@@ -707,6 +707,20 @@ def process_and_reconstruct(
         print(f"✓ Loaded {len(raw_df_original)} original trajectory points (perspective view)")
         print(f"✓ Loaded {len(raw_df_overhead)} overhead trajectory points (homography view)")
     
+    # Fill in missing frames with NaN to enable interpolation
+    # This ensures all frames from first to last detection are present
+    min_frame = int(min(raw_df_original['frame'].min(), raw_df_overhead['frame'].min()))
+    max_frame = int(max(raw_df_original['frame'].max(), raw_df_overhead['frame'].max()))
+    all_frames = pd.DataFrame({'frame': range(min_frame, max_frame + 1)})
+    
+    # Merge to add missing frames (will have NaN for x, y, radius)
+    raw_df_original = pd.merge(all_frames, raw_df_original, on='frame', how='left')
+    raw_df_overhead = pd.merge(all_frames, raw_df_overhead, on='frame', how='left')
+    
+    missing_frames_count = all_frames.shape[0] - len(original_points)
+    if verbose and missing_frames_count > 0:
+        print(f"  Added {missing_frames_count} missing frames for interpolation (range: {min_frame}-{max_frame})")
+    
     # Stage 1: Process ORIGINAL trajectory
     if verbose:
         print("\n--- Stage 1a: Original Trajectory Processing ---")
@@ -776,7 +790,8 @@ def process_and_reconstruct(
                 verbose=verbose
             )
             
-            # Merge cleaned radius into BOTH processed trajectories
+            # Merge BOTH cleaned radius AND fitted radius into processed trajectories
+            # First merge cleaned radius (measured values with outliers removed)
             processed_df_original = pd.merge(
                 processed_df_original,
                 cleaned_radius_df[['frame', 'radius']],
@@ -791,8 +806,56 @@ def process_and_reconstruct(
                 how='left'
             )
             
+            # Then merge fitted radius (RANSAC exponential model)
+            processed_df_original = pd.merge(
+                processed_df_original,
+                radius_fitted_df[['frame', 'radius']].rename(columns={'radius': 'radius_fitted'}),
+                on='frame',
+                how='left'
+            )
+            
+            processed_df_overhead = pd.merge(
+                processed_df_overhead,
+                radius_fitted_df[['frame', 'radius']].rename(columns={'radius': 'radius_fitted'}),
+                on='frame',
+                how='left'
+            )
+            
+            # Interpolate missing measured radius using RANSAC fitted values
+            # Note: pandas automatically adds _x and _y  suffixes when merging columns with same name
+            # So 'radius' from processed_df becomes 'radius_x' and from cleaned_radius_df becomes 'radius_y'
+            if 'radius_x' in processed_df_original.columns and 'radius_fitted' in processed_df_original.columns:
+                # Find frames where both measured radius values are NaN but fitted exists
+                missing_radius_mask = (
+                    processed_df_original['radius_x'].isna() & 
+                    processed_df_original['radius_y'].isna() & 
+                    processed_df_original['radius_fitted'].notna()
+                )
+                interpolated_count = missing_radius_mask.sum()
+                
+                # For frames with no measured radius, use RANSAC fitted value
+                processed_df_original.loc[missing_radius_mask, 'radius_x'] = processed_df_original.loc[missing_radius_mask, 'radius_fitted']
+                processed_df_original.loc[missing_radius_mask, 'radius_y'] = processed_df_original.loc[missing_radius_mask, 'radius_fitted']
+                processed_df_overhead.loc[missing_radius_mask, 'radius_x'] = processed_df_overhead.loc[missing_radius_mask, 'radius_fitted']
+                processed_df_overhead.loc[missing_radius_mask, 'radius_y'] = processed_df_overhead.loc[missing_radius_mask, 'radius_fitted']
+                
+                if verbose and interpolated_count > 0:
+                    print(f"  ✓ Interpolated radius for {interpolated_count} missing frames using RANSAC model")
+            elif 'radius' in processed_df_original.columns and 'radius_fitted' in processed_df_original.columns:
+                # Fallback: if no _x/_y columns, check plain 'radius' column
+                missing_radius_mask = processed_df_original['radius'].isna() & processed_df_original['radius_fitted'].notna()
+                interpolated_count = missing_radius_mask.sum()
+                
+                processed_df_original.loc[missing_radius_mask, 'radius'] = processed_df_original.loc[missing_radius_mask, 'radius_fitted']
+                processed_df_overhead.loc[missing_radius_mask, 'radius'] = processed_df_overhead.loc[missing_radius_mask, 'radius_fitted']
+                
+                if verbose and interpolated_count > 0:
+                    print(f"  ✓ Interpolated radius for {interpolated_count} missing frames using RANSAC model")
+            
             if verbose:
                 print(f"  ✓ Radius cleaning complete (applied to both coordinate systems)")
+                print(f"    - 'radius_x/radius_y': Measured (cleaned) + Interpolated (RANSAC for missing frames)")
+                print(f"    - 'radius_fitted': RANSAC fitted exponential model")
         
         except Exception as e:
             if verbose:
@@ -817,7 +880,7 @@ def process_and_reconstruct(
         output_path = Path(output_dir) if output_dir else Path(trajectory_json_path).parent
         output_path.mkdir(parents=True, exist_ok=True)
         
-        # Save THREE CSV files
+        # Save THREE main trajectory CSV files
         processed_original_csv = output_path / "trajectory_processed_original.csv"
         processed_overhead_csv = output_path / "trajectory_processed_overhead.csv"
         reconstructed_csv = output_path / "trajectory_reconstructed.csv"
@@ -830,6 +893,13 @@ def process_and_reconstruct(
             print(f"\n✓ Saved processed original trajectory: {processed_original_csv}")
             print(f"✓ Saved processed overhead trajectory: {processed_overhead_csv}")
             print(f"✓ Saved reconstructed trajectory: {reconstructed_csv}")
+        
+        # Save RANSAC fitted radius as separate CSV (if available)
+        if radius_fitted_df is not None:
+            radius_fitted_csv = output_path / "radius_fitted_ransac.csv"
+            radius_fitted_df.to_csv(radius_fitted_csv, index=False)
+            if verbose:
+                print(f"✓ Saved RANSAC fitted radius: {radius_fitted_csv}")
     
     # Generate visualizations
     if generate_visualizations and save_outputs:
@@ -1587,6 +1657,188 @@ def create_trajectory_animation_video(
         print(f"  ✓ Saved trajectory animation: {output_file}")
         print(f"    Size: {file_size_mb:.1f} MB, Duration: {duration_sec:.1f}s")
 
+
+
+def create_ball_overlay_video(
+    video_path: str,
+    trajectory_csv_path: str,
+    output_path: Path,
+    fps: int = 30,
+    circle_color: Tuple[int, int, int] = (0, 255, 0),  # Green
+    trajectory_color: Tuple[int, int, int] = (255, 0, 255),  # Magenta
+    line_width: int = 2,
+    radius_source: str = "measured",  # "measured" or "fitted"
+    output_filename: str = None,
+    verbose: bool = True
+) -> None:
+    """
+    Create video overlaying cleaned ball circle and trajectory on original video frames.
+    Verifies that detected position and radius accurately track the actual ball.
+    
+    Args:
+        video_path: Path to the original video file
+        trajectory_csv_path: Path to processed trajectory CSV (with x, y, radius columns)
+        output_path: Directory to save visualization video
+        fps: Frames per second for output video
+        circle_color: BGR color for ball circle overlay
+        trajectory_color: BGR color for trajectory path
+        line_width: Width of circle and trajectory lines
+        radius_source: Which radius to use - "measured" (cleaned measured) or "fitted" (RANSAC model)
+        output_filename: Custom output filename (default: ball_tracking_overlay.mp4 or ball_tracking_overlay_ransac.mp4)
+        verbose: Print save information
+    """
+    # Load trajectory data
+    try:
+        trajectory_df = pd.read_csv(trajectory_csv_path)
+    except Exception as e:
+        if verbose:
+            print(f"  ⚠ Warning: Could not load trajectory CSV: {e}")
+        return
+    
+    # Open video
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        if verbose:
+            print(f"  ⚠ Warning: Could not open video: {video_path}")
+        return
+    
+    # Get video properties
+    video_fps = int(cap.get(cv2.CAP_PROP_FPS))
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_video_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    # Use provided fps if valid, otherwise use video fps
+    output_fps = fps if fps > 0 else video_fps
+    
+    # Prepare output video with appropriate filename
+    if output_filename is None:
+        if radius_source == "fitted":
+            output_filename = "ball_tracking_overlay_ransac.mp4"
+        else:
+            output_filename = "ball_tracking_overlay.mp4"
+    
+    output_file = output_path / output_filename
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(str(output_file), fourcc, output_fps, (frame_width, frame_height))
+    
+    if not out.isOpened():
+        if verbose:
+            print(f"  ⚠ Warning: Could not create video writer")
+        cap.release()
+        return
+    
+    # Create frame mapping (trajectory frame -> video frame)
+    trajectory_frames = trajectory_df['frame'].values
+    trajectory_x = trajectory_df['x'].values
+    trajectory_y = trajectory_df['y'].values
+    
+    # Get radius based on source parameter
+    if radius_source == "fitted":
+        # Use RANSAC fitted radius
+        if 'radius_fitted' in trajectory_df.columns:
+            # Ensure numeric type
+            trajectory_radius = pd.to_numeric(trajectory_df['radius_fitted'], errors='coerce').values
+            radius_label = "RANSAC Fitted"
+        else:
+            if verbose:
+                print(f"  ⚠ Warning: radius_fitted column not found, falling back to measured radius")
+            radius_source = "measured"
+    
+    if radius_source == "measured":
+        # Use cleaned measured radius (average of radius_x and radius_y if both exist)
+        if 'radius_x' in trajectory_df.columns and 'radius_y' in trajectory_df.columns:
+            # Ensure numeric types before calculation to avoid NaN from string operations
+            radius_x = pd.to_numeric(trajectory_df['radius_x'], errors='coerce')
+            radius_y = pd.to_numeric(trajectory_df['radius_y'], errors='coerce')
+            trajectory_radius = ((radius_x + radius_y) / 2).values
+            radius_label = "Measured"
+        elif 'radius' in trajectory_df.columns:
+            trajectory_radius = pd.to_numeric(trajectory_df['radius'], errors='coerce').values
+            radius_label = "Measured"
+        else:
+            # Default radius if not available
+            trajectory_radius = np.full(len(trajectory_df), 20.0)
+            radius_label = "Default"
+    
+    # Create lookup dict for faster access
+    trajectory_dict = {}
+    for i in range(len(trajectory_frames)):
+        frame_num = trajectory_frames[i]
+        trajectory_dict[frame_num] = {
+            'x': trajectory_x[i],
+            'y': trajectory_y[i],
+            'radius': trajectory_radius[i],
+            'index': i
+        }
+    
+    # Track trajectory points for cumulative drawing
+    trajectory_points = []
+    
+    if verbose:
+        print(f"  Generating ball overlay video:")
+        print(f"    Video: {Path(video_path).name}")
+        print(f"    Frames: {total_video_frames}, FPS: {output_fps}")
+        print(f"    Trajectory points: {len(trajectory_df)}")
+        print(f"    Radius source: {radius_label}")
+    
+    # Process video frame by frame
+    frame_idx = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Check if this frame has trajectory data
+        if frame_idx in trajectory_dict:
+            data = trajectory_dict[frame_idx]
+            
+            # Handle potential NaN values in radius
+            radius_value = data['radius']
+            if np.isnan(radius_value):
+                # Skip this frame if radius is NaN (shouldn't happen after interpolation)
+                frame_idx += 1
+                out.write(frame)
+                continue
+            
+            x, y, radius = int(data['x']), int(data['y']), int(radius_value)
+            
+            # Add to trajectory history
+            trajectory_points.append((x, y))
+            
+            # Draw trajectory path (cumulative line)
+            if len(trajectory_points) > 1:
+                for i in range(1, len(trajectory_points)):
+                    pt1 = trajectory_points[i - 1]
+                    pt2 = trajectory_points[i]
+                    cv2.line(frame, pt1, pt2, trajectory_color, line_width)
+            
+            # Draw circle at current ball position
+            cv2.circle(frame, (x, y), radius, circle_color, line_width)
+            cv2.circle(frame, (x, y), 3, circle_color, -1)  # Center dot
+            
+            # Add frame information with radius source label
+            info_text = f"Frame: {frame_idx} | Ball: ({x}, {y}) | Radius ({radius_label}): {radius:.1f}px"
+            cv2.putText(frame, info_text, (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 4)
+            cv2.putText(frame, info_text, (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
+        
+        # Write frame
+        out.write(frame)
+        frame_idx += 1
+    
+    # Release resources
+    cap.release()
+    out.release()
+    
+    if verbose:
+        file_size_mb = output_file.stat().st_size / (1024 * 1024)
+        duration_sec = total_video_frames / output_fps
+        print(f"  ✓ Saved ball overlay video: {output_file}")
+        print(f"    Size: {file_size_mb:.1f} MB, Duration: {duration_sec:.1f}s")
+        print(f"    Tracked frames: {len(trajectory_points)}/{total_video_frames} | Radius: {radius_label}")
+        print(f"    Tracked frames: {len(trajectory_points)}/{total_video_frames}")
 
 
 def visualize_all_processing(

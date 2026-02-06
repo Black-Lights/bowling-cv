@@ -16,7 +16,7 @@ Computer vision system for analyzing bowling ball trajectory, spin/rotation axis
 ## Project Status
 
 **Phase 1: Lane Detection** - ✅ **COMPLETE** (All 4 Boundaries Detected)  
-**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F+G Integrated)  
+**Phase 2: Ball Detection** - ✅ **COMPLETE** (Stages B+C+D+E+F+G+H Integrated)  
 **Phase 3: 3D Trajectory Reconstruction** - Planned  
 **Phase 4: Spin/Rotation Analysis** - Planned  
 **Phase 5: Pin Detection** - Planned
@@ -147,6 +147,8 @@ bowling-cv/
 │       ├── motion_detection.py    # MOG2 background subtraction (Stage B)
 │       ├── roi_logic.py           # Kalman filter tracking (Stages C+E)
 │       ├── blob_analysis.py       # Geometric validation (Stage D)
+│       ├── post_processing.py     # Trajectory cleaning & reconstruction (Stage G)
+│       ├── overlay_ransac.py      # RANSAC overlay video generation (Stage H)
 │       ├── integrated_visualization.py # 4 diagnostic visualization videos
 │       └── roi_visualization.py   # Legacy visualization (pre-integration)
 │
@@ -293,6 +295,23 @@ bowling-cv/
     - Fully integrated into main pipeline as Step 6
     - Configurable via `--skip-postprocess` CLI flag and config.py parameters
     - All visualization flags individually controllable in config.py
+  
+  - ✅ **Stage H: Overlay Video Generation**
+    - Ball tracking overlay on original video frames
+    - **RANSAC fitted radius visualization** (yellow circles showing exponential decay model)
+    - **Trajectory path overlay** (magenta line showing complete ball path)
+    - **Frame information display** (frame number, position, radius value)
+    - **Visual verification** - confirms RANSAC fitted radius accurately tracks actual ball
+    - **Configuration** (Stage H section in config.py):
+      - `OVERLAY_FPS` = 30 (output video frame rate)
+      - `OVERLAY_CIRCLE_COLOR` = (0, 255, 255) (yellow for RANSAC)
+      - `OVERLAY_TRAJECTORY_COLOR` = (255, 0, 255) (magenta path)
+      - `OVERLAY_LINE_WIDTH` = 2 (circle and trajectory thickness)
+      - `OVERLAY_RADIUS_SOURCE` = "fitted" (RANSAC vs measured)
+    - **Standalone module**: `python -m src.ball_detection.overlay_ransac <video_file>`
+    - **Integration**: Works with `trajectory_processed_original.csv` from Stage G
+    - **Output**: `ball_tracking_overlay_ransac.mp4`
+    - **Customizable appearance**: All colors and line widths controlled via config
 
 ### 🔄 In Progress (Phase 2 - Advanced Analysis)
 - **Trajectory Analysis & Physics**
@@ -350,6 +369,9 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --ski
 
 # Skip post-processing if you only need raw trajectory
 python -m src.ball_detection.main --video cropped_test3.mp4 --skip-postprocess
+
+# Generate RANSAC overlay video (Stage H)
+python -m src.ball_detection.overlay_ransac cropped_test3.mp4
 ```
 
 **Integrated Tracking Outputs (4 diagnostic videos + trajectory data + post-processing):**
@@ -372,8 +394,17 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-postprocess
 - `*_overhead_trajectory.png` - **NEW**: Trajectory plot on overhead (transformed) view
 
 **Stage G Post-Processing Outputs:**
-- `trajectory_processed.csv` - Cleaned trajectory in homography space (median filter + outlier removal + smoothing)
+- `trajectory_processed_original.csv` - Cleaned trajectory in original (perspective) coordinates
+- `trajectory_processed_overhead.csv` - Cleaned trajectory in overhead (homography) coordinates  
 - `trajectory_reconstructed.csv` - Final trajectory scaled to lane template coordinates
+- `trajectory_processing_original.png` - Visualization of cleaning steps (original coordinates)
+- `trajectory_processing_overhead.png` - Visualization of cleaning steps (overhead coordinates)
+- `radius_processing_visualization.png` - RANSAC radius model fitting
+- `trajectory_on_template.png` - Final trajectory on bowling lane template
+- `trajectory_animation.mp4` - Animated trajectory building video
+
+**Stage H Overlay Video Output:**
+- `ball_tracking_overlay_ransac.mp4` - Ball tracking overlay with RANSAC fitted radius (yellow circles) and trajectory path (magenta line)
 
 **Stage A-B Intermediate Outputs:**
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
@@ -621,6 +652,11 @@ Detailed documentation is available in the [`docs/`](docs/) directory:
   - [x] Trajectory cleaning (median filter, outlier detection)
   - [x] Template reconstruction with scaling
   - [x] CSV export for analysis
+- [x] **Stage H: Overlay Video Generation**
+  - [x] RANSAC fitted radius overlay on original frames
+  - [x] Trajectory path visualization
+  - [x] Configurable appearance (colors, line width, FPS)
+  - [x] Visual verification of post-processing accuracy
 - [x] **Integrated Visualization**
   - [x] 4 diagnostic videos (candidates, selection, trajectory, debug)
 
@@ -717,10 +753,11 @@ For questions or collaboration inquiries:
 - MSAC-based top boundary detection
 
 **Phase 2 (Ball Detection & Tracking)** - ✅ **COMPLETE** (February 2026)
-- Complete pipeline: Stages A through G integrated
+- Complete pipeline: Stages A through H integrated
 - Tracking-by-Detection architecture (filter → select → track)
 - Stop condition with Kalman predictions
 - Post-processing with trajectory cleaning and reconstruction
+- RANSAC overlay video generation for visual verification
 - 4 diagnostic visualization videos
 - JSON and CSV trajectory export
 
@@ -728,11 +765,18 @@ For questions or collaboration inquiries:
 
 **Next Phase**: 3D trajectory reconstruction and spin/rotation analysis
 
-**Last Updated**: February 5, 2026
+**Last Updated**: February 6, 2026
 
 ---
 
 ## Recent Achievements
+
+### Stage H: RANSAC Overlay Video Generation (February 6, 2026)
+- Created standalone overlay video generation module
+- RANSAC fitted radius visualization with exponential decay model
+- Trajectory path overlay on original video frames
+- Full configuration integration with customizable appearance
+- Visual verification tool for post-processing accuracy
 
 ### Stage G Post-Processing (February 5, 2026)
 - Integrated trajectory cleaning pipeline
@@ -742,7 +786,7 @@ For questions or collaboration inquiries:
 
 ### Complete Phase 2 Pipeline (February 2026)
 - Tracking-by-Detection architecture implemented
-- All 7 stages integrated (A through G)
+- All 8 stages integrated (A through H)
 - Tested on multiple videos with excellent results
 - Zero outliers detected in test6 (indicates robust tracking)
 
