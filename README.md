@@ -147,6 +147,8 @@ bowling-cv/
 │       ├── motion_detection.py    # MOG2 background subtraction (Stage B)
 │       ├── roi_logic.py           # Kalman filter tracking (Stages C+E)
 │       ├── blob_analysis.py       # Geometric validation (Stage D)
+│       ├── post_processing.py     # Trajectory cleaning & reconstruction (Stage G)
+│       ├── overlay_ransac.py      # RANSAC overlay video generation (Stage H)
 │       ├── integrated_visualization.py # 4 diagnostic visualization videos
 │       └── roi_visualization.py   # Legacy visualization (pre-integration)
 │
@@ -293,6 +295,15 @@ bowling-cv/
     - Fully integrated into main pipeline as Step 6
     - Configurable via `--skip-postprocess` CLI flag and config.py parameters
     - All visualization flags individually controllable in config.py
+  
+  - ✅ **Stage H: Overlay Video Generation**
+    - Ball tracking overlay on original video frames
+    - RANSAC fitted radius visualization (yellow circles)
+    - Trajectory path overlay (magenta line)
+    - Frame-by-frame position and radius information
+    - Configurable colors, line width, and FPS
+    - Standalone module: `python -m src.ball_detection.overlay_ransac <video_file>`
+    - Output: `ball_tracking_overlay_ransac.mp4`
 
 ### 🔄 In Progress (Phase 2 - Advanced Analysis)
 - **Trajectory Analysis & Physics**
@@ -350,6 +361,9 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-masking --ski
 
 # Skip post-processing if you only need raw trajectory
 python -m src.ball_detection.main --video cropped_test3.mp4 --skip-postprocess
+
+# Generate RANSAC overlay video (Stage H)
+python -m src.ball_detection.overlay_ransac cropped_test3.mp4
 ```
 
 **Integrated Tracking Outputs (4 diagnostic videos + trajectory data + post-processing):**
@@ -372,8 +386,17 @@ python -m src.ball_detection.main --video cropped_test3.mp4 --skip-postprocess
 - `*_overhead_trajectory.png` - **NEW**: Trajectory plot on overhead (transformed) view
 
 **Stage G Post-Processing Outputs:**
-- `trajectory_processed.csv` - Cleaned trajectory in homography space (median filter + outlier removal + smoothing)
+- `trajectory_processed_original.csv` - Cleaned trajectory in original (perspective) coordinates
+- `trajectory_processed_overhead.csv` - Cleaned trajectory in overhead (homography) coordinates  
 - `trajectory_reconstructed.csv` - Final trajectory scaled to lane template coordinates
+- `trajectory_processing_original.png` - Visualization of cleaning steps (original coordinates)
+- `trajectory_processing_overhead.png` - Visualization of cleaning steps (overhead coordinates)
+- `radius_processing_visualization.png` - RANSAC radius model fitting
+- `trajectory_on_template.png` - Final trajectory on bowling lane template
+- `trajectory_animation.mp4` - Animated trajectory building video
+
+**Stage H Overlay Video Output:**
+- `ball_tracking_overlay_ransac.mp4` - Ball tracking overlay with RANSAC fitted radius (yellow circles) and trajectory path (magenta line)
 
 **Stage A-B Intermediate Outputs:**
 - `output/<video_name>/ball_detection/intermediate/cropped_<video>_lane_masked.mp4` - 4-side masked video
